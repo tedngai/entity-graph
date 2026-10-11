@@ -4,6 +4,9 @@ Working rules for any AI agent (or human) doing work in this repository.
 Before starting a task, read `PROGRESS.xml` to see where things stand, and
 update it when you finish.
 
+**Commit as you go.** A finished slice is committed before the next slice
+starts. Do not save commits for the end of a task. See §6.
+
 ## 1. Project mission
 
 Build a system that **extracts entities and their relationships from
@@ -82,13 +85,25 @@ py -m pytest                              # tests (no DB or network needed)
 
 1. Read `PROGRESS.xml`; pick a task with `status="todo"` (or your assigned one).
 2. Set `status="in-progress"` with your identifier before working.
-3. Do the work; keep changes consistent with `docs/ARCHITECTURE.md`.
-4. When done: update task `status="done"`, add a one-line `notes`, bump the
-   root `updated` attribute.
-5. If you made a significant technical choice, add a decision record to
-   `docs/DECISIONS.md` and reference its ID in the task notes.
-6. New research findings go into `docs/RESEARCH.md` (with source URLs), not
-   into code comments.
+3. Do the work in small slices. Keep each slice consistent with
+   `docs/ARCHITECTURE.md`.
+4. **Commit each finished slice before starting the next one.** A slice is one
+   logical change: a module, a migration, a decision record, or a test that
+   passes. Do not batch a whole task into a single commit at the end.
+5. Before each commit: run the relevant tests (`py -m pytest` when the slice
+   touches extraction or the gate). Do not commit a tree you know is broken.
+6. Commit message: what changed and why, one or two sentences. Never commit
+   `.env`, tokens, or credentials (see §8).
+7. Push only when the user asks. Authenticate with `GITHUB_PAT` per-push; do
+   not store the token in `.git/config`.
+8. When the task is done: update task `status="done"`, add a one-line `notes`,
+   bump the root `updated` attribute, and commit that bookkeeping with the
+   slice it describes (or as its own commit if the code is already committed).
+9. If you made a significant technical choice, add a decision record to
+   `docs/DECISIONS.md` and reference its ID in the task notes. Commit the
+   record with the code it justifies.
+10. New research findings go into `docs/RESEARCH.md` (with source URLs), not
+    into code comments.
 
 ## 7. Known open questions
 
