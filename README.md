@@ -59,6 +59,21 @@ Backends: `baseline` (zero-dep), `spacy` (fast local fallback), `gliner2`
 `GLINER_DEVICE` (`auto` | `cpu` | `cuda`), `GLINER_MODEL`, and `GLINER_THRESHOLD`
 tune the GLiNER2 backend; see `.env.example`.
 
+**OCR documents.** Scanned/OCR sources carry page scaffolding (`## Page N:
+imageNNNNN.jpg`, `---`, code fences), inline footnote markers, and
+line/page-break hyphenation. When detected (`# OCR Results` or a page marker)
+the text is cleaned at ingest — scaffolding stripped, pages rejoined, footnotes
+removed, words de-hyphenated using the document as its own dictionary — before
+it is stored, so offsets and evidence quotes stay consistent. Ordinary Markdown
+is untouched; disable with `PREPROCESS_OCR=false`. Preview the result without
+touching the database:
+
+```powershell
+entity-graph preprocess --input path\to\book.md --out book.clean.md
+```
+
+See `docs/DECISIONS.md` D16.
+
 **LLM escalation.** Add `--escalate` (or `EXTRACTION_ESCALATE=true`) to re-extract
 documents the cheap pass flags as uncertain with an LLM, then merge the results:
 
@@ -109,7 +124,7 @@ entity-graph/
 │   ├── ARCHITECTURE.md        # data flow, modules, contracts
 │   └── DECISIONS.md           # decision records (ADRs)
 ├── src/entity_graph/
-│   ├── config.py  db.py  ingest.py  resolve.py
+│   ├── config.py  db.py  ingest.py  resolve.py  preprocess.py
 │   ├── extract/               # baseline / spacy / JointIE / Decide / Jev
 │   ├── graph_store.py         # write facts; load graph into NetworkX
 │   ├── eval_facts.py          # gold-fact precision/recall (no threshold writes)
@@ -121,7 +136,7 @@ entity-graph/
 
 ## Status
 
-See `PROGRESS.xml`. Research, scaffolding, ingestion, chunking, JointIE
-extraction, the Jev and Decide gates, and the gold-fact eval are implemented.
-The 0.5 assertion cutoff is frozen (D15) until `entity-graph eval` is run on
-more than the bundled sample.
+See `PROGRESS.xml`. Research, scaffolding, ingestion (including OCR
+preprocessing), chunking, JointIE extraction, the Jev and Decide gates, and the
+gold-fact eval are implemented. The 0.5 assertion cutoff is frozen (D15) until
+`entity-graph eval` is run on more than the bundled sample.

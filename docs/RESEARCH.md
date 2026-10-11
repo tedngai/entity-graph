@@ -330,6 +330,26 @@ when a key exists, and uses Decide only as the offline gate
   actually appear. ([docling](https://github.com/DS4SD/docling),
   [unstructured](https://github.com/Unstructured-IO/unstructured))
 
+### OCR preprocessing before extraction (2026-10-11, P3.4, D16)
+Published practice for feeding OCR output to NER agrees on a small, mostly
+rule-based cleanup pass rather than model-specific tricks: strip page/layout
+artifacts, rejoin lines broken mid-sentence, remove footnote/reference markers,
+de-hyphenate soft line breaks, and normalise Unicode punctuation. The HAL
+study *When to Use OCR Post-correction for Named Entity Recognition?* finds the
+useful gains come from exactly these structural fixes, and that aggressive
+character-level correction can hurt (it changes names). Our Shanghai book run
+confirmed the shape of the problem: 262/334 pages end mid-sentence, 220
+`\textsuperscript{N}` markers, and ~14 hyphen breaks — but 3 of those are real
+hyphenated romanisations, so blanket de-hyphenation is wrong.
+
+Implementation (`preprocess.py`, D16) uses the **document itself as the
+de-hyphenation dictionary**: `Shang-\nhai` → `Shanghai` because "Shanghai"
+occurs elsewhere, while `Yueh-sheng` keeps its hyphen because the joined form
+does not. No bundled word list is required, and 13/14 real cases resolved.
+Sources: [Labelyourdata — OCR preprocessing for NLP](https://labelyourdata.com/articles/ocr-data-entry),
+[When to Use OCR Post-correction for NER? (HAL)](https://hal.science/),
+[Mastering Document Preprocessing for NER with BERT](https://medium.com/@mleinbayarea/mastering-document-preprocessing-for-ner-with-bert-a9f54d9a2c72).
+
 ## 6. Postgres ↔ NetworkX integration
 - Load with pandas: `pd.read_sql("SELECT * FROM v_graph_edges", conn)` →
   [`nx.from_pandas_edgelist`](https://networkx.org/documentation/stable/reference/generated/networkx.convert_matrix.from_pandas_edgelist.html)

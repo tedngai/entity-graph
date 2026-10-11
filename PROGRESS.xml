@@ -38,6 +38,7 @@
       <task id="P3.1" name="Ingest .txt/.md with sha256 dedupe" status="done" notes="src/entity_graph/ingest.py"/>
       <task id="P3.2" name="PDF ingestion via pypdf" status="done" notes="Optional extra [ingest-pdf]; gracefully skipped if not installed"/>
       <task id="P3.3" name="Chunking strategy for long documents (sentence windows)" status="done" notes="src/entity_graph/chunking.py (split_sentences + chunk_text); pipeline.extract_document rebases offsets &amp; dedupes overlap; config CHUNK_* knobs; tests/test_chunking.py. DECISIONS.md D6"/>
+      <task id="P3.4" name="OCR preprocessing at ingest (scaffolding, footnotes, page rejoin, de-hyphenation)" status="done" notes="src/entity_graph/preprocess.py (clean_ocr_text + looks_like_ocr); auto-detected at ingest, PREPROCESS_OCR=false disables; `entity-graph preprocess` materialises cleaned text; tests/test_preprocess.py. DECISIONS.md D16"/>
     </phase>
 
     <phase id="P4" name="Entity &amp; relation extraction" status="done">
@@ -97,6 +98,7 @@
     <decision id="D13" title="Relation candidates come from JointIE, not independent relations()" ref="docs/DECISIONS.md#d13"/>
     <decision id="D14" title="Modality gate: Jev Choice beside the Noul; Decide when there is no key" ref="docs/DECISIONS.md#d14"/>
     <decision id="D15" title="Gold facts before any cutoff change; 0.5 stays frozen" ref="docs/DECISIONS.md#d15"/>
+    <decision id="D16" title="OCR text is preprocessed at ingest; the document is its own de-hyphenation dictionary" ref="docs/DECISIONS.md#d16"/>
   </decisions>
 
   <risks>

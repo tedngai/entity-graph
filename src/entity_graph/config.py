@@ -49,6 +49,11 @@ class Config:
     chunk_overlap_sentences: int = 2
     chunk_max_chars: int = 1200
 
+    # OCR preprocessing (see preprocess.py): strip page scaffolding and inline
+    # footnote markers, rejoin pages, de-hyphenate, and normalise quotes before
+    # the text is stored. Auto-detected, so ordinary Markdown is untouched.
+    preprocess_ocr: bool = True
+
     # Jev / System One (TypeSafe) typed decisions.
     # Endpoint/model/key are inferred in load_config() in this order:
     #   SYSTEMONE_API_KEY  -> native TypeSafe (POST /v1/systemone, jev-latest)
@@ -126,6 +131,8 @@ def load_config() -> Config:
         chunk_max_sentences=int(env("CHUNK_MAX_SENTENCES", "8")),
         chunk_overlap_sentences=int(env("CHUNK_OVERLAP_SENTENCES", "2")),
         chunk_max_chars=int(env("CHUNK_MAX_CHARS", "1200")),
+        preprocess_ocr=env("PREPROCESS_OCR", "true").strip().lower()
+        not in ("0", "false", "no"),
         systemone_url=env("SYSTEMONE_URL", jev_url_default),
         systemone_api_key=env("SYSTEMONE_API_KEY", "") or jev_key_default,
         systemone_model=env("SYSTEMONE_MODEL", jev_model_default),

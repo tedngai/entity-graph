@@ -22,6 +22,13 @@ def _parser() -> argparse.ArgumentParser:
 
     sub.add_parser("init-db", help="apply db/schema.sql to the database")
 
+    p_pre = sub.add_parser(
+        "preprocess",
+        help="clean OCR text and write it out (no database; useful for inspection)",
+    )
+    p_pre.add_argument("--input", required=True, help="OCR document to clean")
+    p_pre.add_argument("--out", required=True, help="path to write the cleaned text")
+
     p_ingest = sub.add_parser("ingest", help="load documents into the documents table")
     p_ingest.add_argument("--input", default="data/samples", help="directory of documents")
 
@@ -103,6 +110,17 @@ def main(argv: list[str] | None = None) -> int:
         from .ingest import ingest_directory
         docs = ingest_directory(args.input, config)
         print(f"Ingested {len(docs)} new document(s) from {args.input}")
+
+    elif args.command == "preprocess":
+        from .preprocess import clean_ocr_text, looks_like_ocr
+        src = Path(args.input)
+        raw = src.read_text(encoding="utf-8", errors="replace")
+        cleaned = clean_ocr_text(raw) if looks_like_ocr(raw) else raw
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(cleaned, encoding="utf-8")
+        detected = "OCR scaffolding detected" if looks_like_ocr(raw) else "no OCR scaffolding"
+        print(f"Wrote {out} ({len(raw)} -> {len(cleaned)} chars; {detected})")
 
     elif args.command == "extract":
         from .ingest import ingest_directory

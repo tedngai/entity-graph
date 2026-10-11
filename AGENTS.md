@@ -30,6 +30,9 @@ streaming ingestion, multi-tenant isolation.
   spaCy is a lightweight fallback; the LLM backend is an **opt-in
   escalation wrapper** (`EscalatingExtractor`) over a cheap backend, never the
   default (D2, D11).
+- **Ingestion**: OCR documents are cleaned at ingest (`preprocess.py`, D16) —
+  page scaffolding, footnote markers, page-break rejoin, and de-hyphenation —
+  before storage, so offsets/evidence index the cleaned text.
 - **Jev / System One (TypeSafe)**: typed decision calls for entity alignment,
   type arbitration, and relation validation — see `src/entity_graph/extract/jev.py`
   and `docs/RESEARCH.md` §4. It returns `Choice`/`Score`/`Noul` decisions, it is
@@ -46,7 +49,8 @@ streaming ingestion, multi-tenant isolation.
 docker compose up -d                      # start Postgres
 pip install -e .[dev]                     # install (in .venv)
 entity-graph init-db                      # apply db/schema.sql
-entity-graph ingest --input data/samples  # load documents
+entity-graph ingest --input data/samples  # load documents (OCR text is cleaned first)
+entity-graph preprocess --input f.md --out f.clean.md  # clean OCR text only (no DB)
 entity-graph extract                      # run extraction backend
 entity-graph resolve                      # entity resolution (+ Jev if API key set)
 entity-graph curator                      # list uncertain pairs queued by Jev alignment

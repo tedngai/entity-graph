@@ -433,3 +433,52 @@ to pick a new one.
 **Consequences.** `entity-graph eval` needs no database. `--predictions` scores
 a JSON/JSONL file; `--from-db` scores current facts when Postgres is up.
 
+---
+
+## D16 — OCR text is preprocessed at ingest; the document is its own de-hyphenation dictionary
+**Status:** accepted · **Date:** 2026-10-11
+
+**Context.** The Shanghai Capitalists book (P9.1) arrives as OCR output: an
+`# OCR Results` preamble with a Windows source path, 334 `## Page N:
+imageNNNNN.jpg` markers, 335 `---` rules, 668 code fences, 220
+`\textsuperscript{N}` markers, Unicode superscript footnote digits, and
+typographic punctuation. Two structural problems directly hurt extraction:
+**262 of 334 pages end mid-sentence** (so page scaffolding cuts sentences and
+entity names in half), and ~14 line/page breaks hyphenate a word (`Shang-\nhai`,
+`Chi-\nnese`) — though some are genuine hyphenated romanizations (`Yueh-sheng`,
+`Li-shih`, `profit-earning`) that must not be stripped.
+
+**Decision.** `preprocess.py` cleans OCR text at **ingest**, before it is stored,
+so mention offsets and evidence quotes index the same cleaned text (invariant
+#1); the original file stays on disk and is recorded in `documents.source_uri`.
+`clean_ocr_text`:
+1. keeps only the fenced page bodies (drops the preamble, markers, rules,
+   fences) and **rejoins pages** — a page ending mid-sentence continues on the
+   next with a space, a page ending on terminal punctuation starts a new
+   paragraph;
+2. strips inline footnote markers (`\textsuperscript{...}`, Unicode
+   superscripts) and unwraps `\textit{...}` (keeping its text);
+3. **de-hyphenates using the document itself as its dictionary**: a break
+   `head- tail` is joined only when `headtail` (case-folded) occurs elsewhere in
+   the document, so attested compounds (`Yueh-sheng`, `profit-earning`) keep
+   their hyphen;
+4. normalises typographic quotes/dashes to ASCII and collapses whitespace.
+
+Detection is conservative (`looks_like_ocr` requires an `# OCR Results`
+heading or a `## Page N: <file>.<img>` marker), so ordinary Markdown is left
+untouched. `PREPROCESS_OCR=false` disables it. `entity-graph preprocess
+--input <file> --out <file>` materialises the cleaned text for inspection.
+
+**Why.** Extraction, sentence splitting, and Jev evidence quotes all assume
+prose; the scaffolding is pure noise and the page breaks are actively
+destructive. Doing it at ingest keeps offsets consistent instead of adding a
+second coordinate system. The self-referential de-hyphenation rule resolved
+13/14 real cases (only the rare `count-less` is left hyphenated) without
+needing a bundled dictionary.
+
+**Consequences.** `documents.raw_text` now holds cleaned text for OCR inputs
+(the checksum, hence idempotency, is over the cleaned text — invariant #5).
+`config.preprocess_ocr` (env `PREPROCESS_OCR`, default on). Book run: 694,291 →
+655,495 chars, zero scaffolding tokens remaining, all risky names preserved.
+
+

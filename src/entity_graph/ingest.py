@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .config import Config, load_config
 from .db import connect
+from .preprocess import clean_ocr_text, looks_like_ocr
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +52,15 @@ def ingest_directory(input_dir: str | Path, config: Config | None = None) -> lis
             if not text.strip():
                 log.info("Skipping empty file %s", path)
                 continue
+            if config.preprocess_ocr and looks_like_ocr(text):
+                cleaned = clean_ocr_text(text)
+                log.info(
+                    "Preprocessed OCR text for %s (%d -> %d chars)",
+                    path.name,
+                    len(text),
+                    len(cleaned),
+                )
+                text = cleaned
             checksum = hashlib.sha256(text.encode("utf-8")).hexdigest()
             cur.execute(
                 """

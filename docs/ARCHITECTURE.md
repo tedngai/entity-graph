@@ -34,7 +34,7 @@
 ```
 
 Orchestrated by `pipeline.py`, exposed through `cli.py`
-(`ingest | extract | resolve | build | analyze | visualize | run | init-db`).
+(`ingest | preprocess | extract | resolve | build | analyze | visualize | run | init-db`).
 
 ## 2. Modules
 
@@ -42,7 +42,8 @@ Orchestrated by `pipeline.py`, exposed through `cli.py`
 |---|---|
 | `config.py` | Loads `.env` → `Config` dataclass (PG, backend, SystemOne settings) |
 | `db.py` | psycopg connection + `apply_schema()` (runs `db/schema.sql`) |
-| `ingest.py` | Walk input dir → sha256-deduped rows in `documents` |
+| `ingest.py` | Walk input dir → sha256-deduped rows in `documents`; OCR text is cleaned first (D16) |
+| `preprocess.py` | OCR cleanup: strip page scaffolding/footnote markers, rejoin pages, de-hyphenate, normalise punctuation |
 | `chunking.py` | Sentence-window splitter for long docs; `Chunk` carries absolute char offsets |
 | `extract/base.py` | Contract: `Mention`, `RelationProposal`, `ExtractionResult`, `Extractor` protocol + registry |
 | `extract/baseline_extractor.py` | Zero-dep heuristic extractor (capitalized spans, same-sentence `RELATED_TO`) — for tests and first runs |
