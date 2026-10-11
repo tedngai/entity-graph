@@ -131,6 +131,7 @@ entity-graph/
 │   ├── analyze.py  visualize.py  pipeline.py  cli.py
 ├── data/samples/              # sample unstructured document
 ├── data/gold/                 # golden facts for eval (P8.1)
+├── scripts/                   # compare_providers.py (Jev vs a local SystemOne server)
 └── tests/
 ```
 

@@ -323,6 +323,40 @@ when a key exists, and uses Decide only as the offline gate
 ([D14](DECISIONS.md#d14)). The 0.5 Noul cutoff is not retuned until
 `data/gold/` is scored ([D15](DECISIONS.md#d15)).
 
+## 4d. Local Clef-Flash vs Jev (2026-10-11)
+
+A local **SystemOne-compatible** server is reachable on this network:
+"Clef-Flash (hardened)" v0.2.0 (`Cloudflare/clef-flash`, CUDA) at
+`http://192.168.1.242:8001`, exposing `/v1/systemone` and `/predict`
+(OpenAPI at `/openapi.json`). Its response body matches Jev's exactly —
+`answers[id]` with `type` / `score` / `noul` / `choice` / `probabilities` /
+`confidence` / `legend` — so `SystemOneClient` drives it unchanged; only
+`SYSTEMONE_URL`/`SYSTEMONE_MODEL` (and any non-empty key) change.
+
+`scripts/compare_providers.py` runs both providers over the gold fact set
+(17 items: 9 facts, 2 nonfacts, 6 traps) and 7 alignment pairs:
+
+| Metric | Jev (`pratt-jev`) | Clef-Flash (local) |
+|---|---|---|
+| gate accuracy (promote == role) | 0.941 | 0.706 |
+| leaks (nonfact/trap promoted) | 0 | 5 |
+| missed facts | 1 | 0 |
+| alignment intended-match | 3/7 | 2/7 |
+| relation batch wall time | 1.04 s | 2.12 s |
+
+Clef-Flash assigns a high assertion Noul to falsehoods — reversed `FOUNDED`
+0.925, fabricated `SUBSIDIARY_OF` 0.543, "invest" evidence for `INVESTED_IN`
+0.711 labelled `fact` — so it promotes 5 of the 8 nonfact/trap items. Jev is
+far more precise on negation and attribution, but rejected one true fact (a
+past-employment `WORKS_FOR`, Noul 0.24). Both route canonical+alias pairs to
+`curator` rather than `merge` (the conservative middle level).
+
+**Verdict.** Clef-Flash is a drop-in *transport* but not yet a drop-in *judge*:
+on this gold set it behaves closer to the local Decide gate than to Jev. Keep
+Jev as the default judgment layer; treat Clef-Flash as a free/private fallback
+until it is calibrated (few-shot criteria, explicit negation handling) and
+re-scored.
+
 ## 5. Document ingestion
 - **txt/md**: direct. **PDF**: `pypdf` for text-layer PDFs (implemented, optional).
 - For scanned/layout-heavy PDFs, the current best tools are IBM **docling** and
