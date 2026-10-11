@@ -13,6 +13,8 @@ dist/
 
 # Outputs
 out/
+# pyvis writes its JS/CSS asset bundle here when visualizing locally
+lib/
 
 # Data (keep samples/ and the gold eval set, ignore bulk drops)
 data/*
