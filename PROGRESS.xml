@@ -59,6 +59,7 @@
       <task id="P5.7" name="Local Decide gate when no Jev key is set" status="done" notes="extract/decide.py: separate modality and relation-agreement passes via gliner2.classification.Classifier. Argmax only; the 0.5 cutoff is not applied to Decide probabilities. Unscored claims still promote. D14"/>
       <task id="P5.5" name="Curator queue surface for score==1 (uncertain) pairs" status="done" notes="curator_queue table + `entity-graph curator` CLI lists pending pairs"/>
       <task id="P5.6" name="Verify Jev request/response fields against live API" status="done" notes="LIVE-verified 2026-10-11 via OpenRouter mirror (model typesafe/jev-1.13-20260917): noul/choice/score all match documented shape; ~$0.00002/call; batched Noul == single-call accuracy. Also verified via Pratt router (POST /v1/systemone, model pratt-jev): alignment score 1.84 -> merge, noul 0.99/0.02 for a claim and its reverse. See RESEARCH.md §4b, DECISIONS.md D12"/>
+      <task id="P5.8" name="Provider prompt profiles; calibrate the local Clef-Flash gate" status="done" notes="extract/profiles.py: RelationPromptProfile (task, assertion, modality criteria, examples, batch size, modality map); default (Jev wording) + clef (doer/receiver assertion, tense cues, 1 claim/request). judge_relations(profile=...); SYSTEMONE_PROFILE env. scripts/calibrate_clef.py sweeps variants; compare_providers.py gained --a-profile/--b-profile. Calibrated Clef matches Jev on the gold gate (0.941, 0 leaks vs 0.706/5) at ~2.5x wall time; misses a different fact. tests/test_profiles.py. See RESEARCH.md §4d-i, DECISIONS.md D17"/>
     </phase>
 
     <phase id="P6" name="Graph store &amp; NetworkX" status="in-progress">
@@ -99,6 +100,7 @@
     <decision id="D14" title="Modality gate: Jev Choice beside the Noul; Decide when there is no key" ref="docs/DECISIONS.md#d14"/>
     <decision id="D15" title="Gold facts before any cutoff change; 0.5 stays frozen" ref="docs/DECISIONS.md#d15"/>
     <decision id="D16" title="OCR text is preprocessed at ingest; the document is its own de-hyphenation dictionary" ref="docs/DECISIONS.md#d16"/>
+    <decision id="D17" title="Relation prompts are a selectable profile; the local Clef model is calibrated opt-in" ref="docs/DECISIONS.md#d17"/>
   </decisions>
 
   <risks>

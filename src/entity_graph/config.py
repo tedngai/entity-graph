@@ -63,6 +63,10 @@ class Config:
     systemone_url: str = "https://api.typesafe.ai/v1/systemone"
     systemone_api_key: str = ""
     systemone_model: str = "jev-latest"
+    # Optional relation-prompt profile (see extract/profiles.py). Empty selects
+    # the Jev-verified default wording; "clef" selects the calibrated local-model
+    # wording (doer/receiver assertion, tense cues, one claim per request).
+    systemone_profile: str = ""
     # Optional OpenRouter attribution headers (sent only when non-empty).
     openrouter_referer: str = ""
     openrouter_title: str = "entity-graph"
@@ -136,6 +140,7 @@ def load_config() -> Config:
         systemone_url=env("SYSTEMONE_URL", jev_url_default),
         systemone_api_key=env("SYSTEMONE_API_KEY", "") or jev_key_default,
         systemone_model=env("SYSTEMONE_MODEL", jev_model_default),
+        systemone_profile=env("SYSTEMONE_PROFILE", ""),
         openrouter_referer=env("OPENROUTER_REFERER", ""),
         openrouter_title=env("OPENROUTER_TITLE", "entity-graph"),
         schema_path=Path(env("SCHEMA_PATH", "db/schema.sql")),

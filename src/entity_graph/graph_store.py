@@ -18,6 +18,7 @@ from .extract.jev import (
     SystemOneClient,
     judge_relations,
 )
+from .extract.profiles import get_profile
 from .resolve import add_alias, entity_for_surface_in_doc, ensure_entity
 
 log = logging.getLogger(__name__)
@@ -40,7 +41,9 @@ def _judge_rows(config: Config, client: SystemOneClient | None, rows: list) -> d
         for pid, _doc, src, dst, relation, evidence, _ex, _conf, source_type, target_type in rows
     ]
     if client.enabled:
-        verdicts = judge_relations(client, claims)
+        verdicts = judge_relations(
+            client, claims, profile=get_profile(config.systemone_profile)
+        )
         log.info("Jev judged %d/%d relation proposals", len(verdicts), len(rows))
         return verdicts
     verdicts = decide_judge_relations(

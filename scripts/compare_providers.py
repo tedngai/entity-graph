@@ -31,6 +31,7 @@ from entity_graph.extract.jev import (  # noqa: E402
     align_pair,
     judge_relations,
 )
+from entity_graph.extract.profiles import get_profile  # noqa: E402
 
 # Alignment pairs with an intended outcome. "merge" pairs are canonical +
 # alias; "separate" pairs are unrelated entities of the same domain.
@@ -55,7 +56,9 @@ def _expected_promote(fact: GoldFact) -> bool:
     return fact.role == "fact"
 
 
-def compare_relations(name: str, client: SystemOneClient, gold: list[GoldFact]) -> dict:
+def compare_relations(
+    name: str, client: SystemOneClient, gold: list[GoldFact], profile=None
+) -> dict:
     claims = [
         {
             "id": i,
@@ -68,7 +71,7 @@ def compare_relations(name: str, client: SystemOneClient, gold: list[GoldFact]) 
     ]
     started = time.perf_counter()
     try:
-        verdicts = judge_relations(client, claims)
+        verdicts = judge_relations(client, claims, profile=profile)
     except Exception as exc:  # noqa: BLE001 - a comparison tool must not crash
         print(f"[{name}] relation judgment failed: {exc}")
         verdicts = {}
@@ -124,10 +127,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--a-url", default="https://llm.pratt.edu/v1/systemone")
     parser.add_argument("--a-model", default="pratt-jev")
     parser.add_argument("--a-key", default="", help="defaults to the configured Jev key")
+    parser.add_argument("--a-profile", default="", help="relation-prompt profile (see profiles.py)")
     parser.add_argument("--b-name", default="clef")
     parser.add_argument("--b-url", default="http://192.168.1.242:8001/v1/systemone")
     parser.add_argument("--b-model", default="Cloudflare/clef-flash")
     parser.add_argument("--b-key", default="local", help="local servers accept any non-empty key")
+    parser.add_argument("--b-profile", default="", help="relation-prompt profile (see profiles.py)")
     args = parser.parse_args(argv)
 
     gold = load_gold(args.gold)
@@ -138,10 +143,11 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"A = {args.a_name:6} {args.a_model:28} {args.a_url}  (key {'set' if a.enabled else 'MISSING'})")
     print(f"B = {args.b_name:6} {args.b_model:28} {args.b_url}  (key {'set' if b.enabled else 'MISSING'})")
-    print(f"Gold: {len(gold)} items; threshold frozen at {RELATION_VALIDATION_THRESHOLD}\n")
+    print(f"Gold: {len(gold)} items; threshold frozen at {RELATION_VALIDATION_THRESHOLD}")
+    print(f"Profiles: A={args.a_profile or 'default'}  B={args.b_profile or 'default'}\n")
 
-    rel_a = compare_relations(args.a_name, a, gold)
-    rel_b = compare_relations(args.b_name, b, gold)
+    rel_a = compare_relations(args.a_name, a, gold, profile=get_profile(args.a_profile))
+    rel_b = compare_relations(args.b_name, b, gold, profile=get_profile(args.b_profile))
 
     print("=== Relation gate (does the evidence assert the claim? modality?) ===")
     header = (f"{'role':8} {'subject':22} {'relation':14} {'object':20} | "

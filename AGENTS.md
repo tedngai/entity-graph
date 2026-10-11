@@ -37,9 +37,12 @@ streaming ingestion, multi-tenant isolation.
   type arbitration, and relation validation — see `src/entity_graph/extract/jev.py`
   and `docs/RESEARCH.md` §4. It returns `Choice`/`Score`/`Noul` decisions, it is
   **not** an NER model and never generates spans. Relation judgment is a Noul
-  plus a modality Choice (D14). With no key, `extract/decide.py` is the local
-  gate. Do not tune `RELATION_VALIDATION_THRESHOLD` without a gold-set report
-  and a new decision record (D15).
+  plus a modality Choice (D14), and its wording is a selectable profile
+  (`extract/profiles.py`, D17): `SYSTEMONE_PROFILE=clef` selects the calibrated
+  local-model wording (doer/receiver assertion, tense cues, one claim per
+  request) instead of the Jev-verified default. With no key, `extract/decide.py`
+  is the local gate. Do not tune `RELATION_VALIDATION_THRESHOLD` without a
+  gold-set report and a new decision record (D15).
 - **Analytics**: NetworkX (`MultiDiGraph`), loaded only through
   `graph_store.load_graph()` which reads `v_graph_nodes` / `v_graph_edges`.
 

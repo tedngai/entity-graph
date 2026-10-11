@@ -47,6 +47,12 @@ from typing import Any
 
 from ..config import Config, load_config
 from .gate import RelationJudgment, normalize_modality
+from .profiles import (
+    DEFAULT_PROFILE,
+    MODALITY_CRITERIA,
+    RelationPromptProfile,
+    get_profile,
+)
 
 log = logging.getLogger(__name__)
 
@@ -73,15 +79,9 @@ ALIGNMENT_CRITERIA = [
 # against data/gold/; changing the constant requires a new decision record (D15).
 RELATION_VALIDATION_THRESHOLD = 0.5
 
-# Short Choice labels for the modality question asked beside the assertion Noul.
-# Argmax only — the promotion rule does not threshold these probabilities.
-MODALITY_CRITERIA = {
-    "fact": "The evidence states this as something that happened or is true.",
-    "possibility": "The evidence only says this might happen or could be true.",
-    "denial": "The evidence says this did not happen or will not happen.",
-    "forecast": "The evidence says this is planned or expected, not yet done.",
-    "not_stated": "The evidence does not state this claim.",
-}
+# `MODALITY_CRITERIA` (the modality Choice labels asked beside the assertion
+# Noul; argmax only — the promotion rule does not threshold them) now lives in
+# profiles.py as the default profile's criteria and is imported above.
 
 
 @dataclass
@@ -317,35 +317,37 @@ def _choice_answer(response: Any, question_id: str) -> str | None:
 
 
 def judge_relations(
-    client: SystemOneClient, claims: list[dict], batch_size: int = 12
+    client: SystemOneClient,
+    claims: list[dict],
+    batch_size: int | None = None,
+    profile: RelationPromptProfile | None = None,
 ) -> dict[int, RelationJudgment]:
     """Noul-validate claims and ask a modality Choice in the same request.
 
     ``claims`` items match ``validate_relations``. Modality is a separate
     question id so it sits beside the assertion Noul rather than replacing it.
     A claim the API does not answer is omitted (treated as unscored).
+
+    Wording and request shape come from ``profile`` (default: the Jev-verified
+    wording). ``batch_size`` overrides the profile's own value when given.
     """
     if not client.enabled or not claims:
         return {}
+    profile = profile or DEFAULT_PROFILE
+    if batch_size is None:
+        batch_size = profile.batch_size
     verdicts: dict[int, RelationJudgment] = {}
     for start in range(0, len(claims), batch_size):
         batch = claims[start : start + batch_size]
-        state = {
-            "task": "For each claim, decide whether its evidence asserts the "
-                    "relation, and what kind of statement that evidence is.",
-            "claims": batch,
-        }
+        state: dict = {"task": profile.task, "claims": batch}
+        if profile.examples:
+            state["examples"] = list(profile.examples)
         questions: dict[str, dict] = {}
         for claim in batch:
             claim_id = claim["id"]
             questions[f"claim_{claim_id}"] = {
                 "type": "noul",
-                "instructions": (
-                    f"For claim `claim_{claim_id}`, probability that its "
-                    f"`evidence` asserts that its `subject` "
-                    f"{str(claim['relation']).lower().replace('_', ' ')} "
-                    f"its `object`? Answer for that claim only."
-                ),
+                "instructions": profile.assertion(claim),
             }
             questions[f"modality_{claim_id}"] = {
                 "type": "choice",
@@ -353,7 +355,7 @@ def judge_relations(
                     f"For claim `claim_{claim_id}`, what kind of statement is "
                     f"its evidence about that claim?"
                 ),
-                "criteria": MODALITY_CRITERIA,
+                "criteria": profile.modality_criteria,
             }
         try:
             response = client.decide(state, questions)
@@ -363,9 +365,10 @@ def judge_relations(
         for claim in batch:
             claim_id = int(claim["id"])
             assertion = _numeric_answer(response, f"claim_{claim_id}", "noul")
-            modality = normalize_modality(
-                _choice_answer(response, f"modality_{claim_id}")
-            )
+            raw_modality = _choice_answer(response, f"modality_{claim_id}")
+            if raw_modality is not None:
+                raw_modality = profile.modality_map.get(raw_modality, raw_modality)
+            modality = normalize_modality(raw_modality)
             if assertion is None and modality is None:
                 continue
             verdicts[claim_id] = RelationJudgment(

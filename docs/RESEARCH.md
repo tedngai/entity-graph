@@ -351,11 +351,49 @@ far more precise on negation and attribution, but rejected one true fact (a
 past-employment `WORKS_FOR`, Noul 0.24). Both route canonical+alias pairs to
 `curator` rather than `merge` (the conservative middle level).
 
-**Verdict.** Clef-Flash is a drop-in *transport* but not yet a drop-in *judge*:
-on this gold set it behaves closer to the local Decide gate than to Jev. Keep
-Jev as the default judgment layer; treat Clef-Flash as a free/private fallback
-until it is calibrated (few-shot criteria, explicit negation handling) and
-re-scored.
+### 4d-i. Calibrating the prompt (2026-10-11)
+
+The model is fixed; only the *wording* and *request shape* can change. A
+calibration harness (`scripts/calibrate_clef.py`) sweeps prompt variants against
+the same gold set, and the winning variant is captured as an opt-in
+`RelationPromptProfile` (`extract/profiles.py`, D17). Three levers mattered, in
+order of effect:
+
+1. **Request batch size is dominant.** A small model's answers degrade as more
+   claims share one context. The same `tense` wording scored 0.824 at 12 claims
+   per request, 0.882 at 4, and **0.941 at 1–2**. Queried alone, the two worst
+   items flip correctly (forecast → `forecast` 0.79; reversed `FOUNDED` → Noul
+   **0.07**). The calibrated profile therefore sends one claim per request.
+2. **Modality criteria must name the tense cues.** Spelling out
+   `will / plans to / is to / expansion into` as `forecast` stops the model
+   reading the main verb ("cooperate") as present and missing the modal ("will").
+   This closed the two forecast-as-fact leaks (`LOCATED_IN Poland`,
+   `INVESTED_IN`).
+3. **The assertion must name the doer/receiver.** Asking "is `subject` the doer
+   and `object` the receiver …" (with an explicit passive-voice warning) drops
+   the reversed `FOUNDED` trap from Noul 0.92 to 0.35, at the cost of one
+   fragment-evidence fact. A separate `direction` Choice question was tried and
+   **rejected**: the model misreads locative relations (`LOCATED_IN`) as
+   "object_to_subject".
+
+| Metric | Jev (`pratt-jev`) | Clef-Flash (default prompts) | Clef-Flash (calibrated `clef` profile) |
+|---|---|---|---|
+| gate accuracy (promote == role) | 0.941 | 0.706 | **0.941** |
+| leaks (nonfact/trap promoted) | 0 | 5 | **0** |
+| missed facts | 1 | 0 | 1 |
+| promote-decision agreement w/ Jev | — | 11/17 | **15/17** |
+| relation batch wall time | 1.04 s | 2.12 s | 4.77 s (17 sequential) |
+
+Calibrated Clef-Flash **matches Jev on the gate** (0.941, 0 leaks) — but it
+misses a *different* fact (`PARTNERED_WITH` with fragment evidence, Noul 0.42),
+so it is a peer, not a superset. Alignment is untouched by the relation profile
+and stays 2/7. The cost is throughput: one claim per request means ~2.5× the
+wall time for the same items.
+
+**Verdict (revised).** Clef-Flash is a drop-in transport, and — with the `clef`
+profile and single-claim requests — a drop-in *gate* on this gold set, at the
+price of sequential calls. Keep Jev as the default; select the calibrated
+profile with `SYSTEMONE_PROFILE=clef` when running against the local server.
 
 ## 5. Document ingestion
 - **txt/md**: direct. **PDF**: `pypdf` for text-layer PDFs (implemented, optional).

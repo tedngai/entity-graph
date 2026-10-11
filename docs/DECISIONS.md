@@ -481,4 +481,38 @@ needing a bundled dictionary.
 `config.preprocess_ocr` (env `PREPROCESS_OCR`, default on). Book run: 694,291 →
 655,495 chars, zero scaffolding tokens remaining, all risky names preserved.
 
+## D17 — Relation prompts are a selectable profile; the local Clef model is calibrated opt-in
+**Status:** accepted · **Date:** 2026-10-11
+
+**Context.** The local SystemOne-compatible server (Clef-Flash, D-none) is a
+drop-in transport but, with Jev's wording, a poor judge: it promoted 5 of the 8
+nonfact/trap gold items (gate accuracy 0.706 vs Jev 0.941). The failure was not
+in the client — it was in the *questions we asked it*. A calibration sweep
+(`scripts/calibrate_clef.py`) showed three effects: request batch size dominates
+(0.824 at 12 claims/request → 0.941 at 1–2), modality criteria must name the
+tense cues (`will/plans to/expansion into` → `forecast`), and the assertion must
+name the doer/receiver with an explicit passive-voice warning to catch reversed
+relations.
+
+**Decision.** Relation-judgment wording and request shape live in
+`extract/profiles.py` as a `RelationPromptProfile` (task, assertion instruction,
+modality criteria, few-shot examples, batch size, optional provider→gate
+modality map). `judge_relations(..., profile=...)` consumes one; `get_profile`
+resolves a name; `SYSTEMONE_PROFILE` selects it (empty = the Jev-verified
+default). Two profiles ship: `default` (unchanged Jev wording, 12/request) and
+`clef` (doer/receiver assertion, tense cues, examples, 1/request). The profile
+changes only wording — `RELATION_VALIDATION_THRESHOLD` stays frozen (D15) and is
+applied identically to both providers.
+
+**Why.** Calibration is prompt engineering against a fixed model, and it should
+be data, not a fork of the client. Keeping it a named profile makes the change
+auditable, testable offline, and reversible, and leaves Jev's verified wording
+as the default so nothing regresses.
+
+**Consequences.** `SYSTEMONE_PROFILE=clef` + the local server reaches gate
+accuracy 0.941 with 0 leaks (promote-agreement with Jev 15/17) at ~2.5× the
+wall time (sequential single-claim requests). It misses a different fact than
+Jev, so it is a peer, not a superset. New profiles are additive; the default is
+untouched. See `docs/RESEARCH.md` §4d-i.
+
 
