@@ -12,7 +12,8 @@ are reversible:
 A curation file is JSON::
 
     {
-      "merges": [["T. V. Soong", "Soong"], ["Tu Yueh-sheng", "Tu"]],
+      "renames": [["Soong", "T. V. Soong"]],
+      "merges": [["T. V. Soong", "T. V. SOONG"], ["Tu Yueh-sheng", "Tu"]],
       "hide":   ["central bank", "finance", "banking"],
       "unhide": []
     }
@@ -36,8 +37,9 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class CurationSpec:
-    """A reversible curation plan: merges, hides, and un-hides."""
+    """A reversible curation plan: renames, merges, hides, and un-hides."""
 
+    renames: list[tuple[str, str]] = field(default_factory=list)
     merges: list[tuple[str, str]] = field(default_factory=list)
     hide: list[str] = field(default_factory=list)
     unhide: list[str] = field(default_factory=list)
@@ -46,12 +48,18 @@ class CurationSpec:
 def load_curation(path: str | Path) -> CurationSpec:
     """Parse and validate a curation JSON file (pure; no database)."""
     data = json.loads(Path(path).read_text(encoding="utf-8"))
+    renames: list[tuple[str, str]] = []
+    for pair in data.get("renames", []):
+        if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+            raise ValueError(f"each rename must be [old, new]; got {pair!r}")
+        renames.append((str(pair[0]), str(pair[1])))
     merges: list[tuple[str, str]] = []
     for pair in data.get("merges", []):
         if not isinstance(pair, (list, tuple)) or len(pair) != 2:
             raise ValueError(f"each merge must be [winner, loser]; got {pair!r}")
         merges.append((str(pair[0]), str(pair[1])))
     return CurationSpec(
+        renames=renames,
         merges=merges,
         hide=[str(x) for x in data.get("hide", [])],
         unhide=[str(x) for x in data.get("unhide", [])],
@@ -170,13 +178,40 @@ def _set_hidden(cur, entity_id: int, hidden: bool) -> bool:
     return cur.rowcount > 0
 
 
+def _rename(cur, entity_id: int, new_name: str) -> str | None:
+    """Rename an entity's canonical name; the old name is kept as an alias."""
+    cur.execute("SELECT canonical_name FROM entities WHERE id = %s", (entity_id,))
+    old_name = cur.fetchone()[0]
+    if old_name == new_name:
+        return None
+    cur.execute("UPDATE entities SET canonical_name = %s WHERE id = %s", (new_name, entity_id))
+    cur.execute(
+        "INSERT INTO entity_aliases (entity_id, alias, source) VALUES (%s, %s, 'rename') "
+        "ON CONFLICT DO NOTHING",
+        (entity_id, old_name),
+    )
+    return old_name
+
+
 def apply_curation(
     spec: CurationSpec, config: Config | None = None, dry_run: bool = False
 ) -> dict:
     """Apply a curation plan. Returns a summary; makes no changes when dry_run."""
     config = config or load_config()
-    summary: dict = {"merged": [], "hidden": [], "unhidden": [], "missing": []}
+    summary: dict = {
+        "renamed": [], "merged": [], "hidden": [], "unhidden": [], "missing": [],
+    }
     with connect(config) as conn, conn.cursor() as cur:
+        # Renames first, so a later merge can reference the new name.
+        for old_name, new_name in spec.renames:
+            entity_id = resolve_entity(cur, old_name)
+            if entity_id is None:
+                summary["missing"].append({"rename": old_name})
+                continue
+            if not dry_run:
+                _rename(cur, entity_id, new_name)
+            summary["renamed"].append([old_name, new_name])
+
         for winner_name, loser_name in spec.merges:
             winner = resolve_entity(cur, winner_name)
             loser = resolve_entity(cur, loser_name)

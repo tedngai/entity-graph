@@ -159,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
         spec = load_curation(args.file)
         summary = apply_curation(spec, config, dry_run=args.dry_run)
         verb = "Would merge" if args.dry_run else "Merged"
+        for old_name, new_name in summary["renamed"]:
+            print(f"  {'Would rename' if args.dry_run else 'Renamed'}: {old_name!r} -> {new_name!r}")
         for winner, loser, result in summary["merged"]:
             print(f"  {verb}: {loser!r} -> {winner!r}  {result}")
         for name in summary["hidden"]:

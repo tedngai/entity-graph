@@ -21,13 +21,15 @@ def _write(tmp_path, payload) -> str:
 
 def test_load_full_spec(tmp_path) -> None:
     path = _write(tmp_path, {
-        "merges": [["T. V. Soong", "Soong"], ["Tu Yueh-sheng", "Tu"]],
+        "renames": [["Soong", "T. V. Soong"]],
+        "merges": [["T. V. Soong", "T. V. SOONG"], ["Tu Yueh-sheng", "Tu"]],
         "hide": ["central bank", "finance"],
         "unhide": ["commission"],
     })
     spec = load_curation(path)
     assert spec == CurationSpec(
-        merges=[("T. V. Soong", "Soong"), ("Tu Yueh-sheng", "Tu")],
+        renames=[("Soong", "T. V. Soong")],
+        merges=[("T. V. Soong", "T. V. SOONG"), ("Tu Yueh-sheng", "Tu")],
         hide=["central bank", "finance"],
         unhide=["commission"],
     )
@@ -35,10 +37,16 @@ def test_load_full_spec(tmp_path) -> None:
 
 def test_load_minimal_spec(tmp_path) -> None:
     spec = load_curation(_write(tmp_path, {}))
-    assert spec == CurationSpec(merges=[], hide=[], unhide=[])
+    assert spec == CurationSpec(renames=[], merges=[], hide=[], unhide=[])
 
 
 def test_load_rejects_bad_merge_pair(tmp_path) -> None:
     path = _write(tmp_path, {"merges": [["only-one-name"]]})
+    with pytest.raises(ValueError):
+        load_curation(path)
+
+
+def test_load_rejects_bad_rename_pair(tmp_path) -> None:
+    path = _write(tmp_path, {"renames": [["only-one-name"]]})
     with pytest.raises(ValueError):
         load_curation(path)

@@ -569,18 +569,21 @@ bank`, `finance`, `banking`, `trust`, `GOVERNMENT`) and bibliography references
 are not part of the network the book is about. There was no way to clean either
 without violating invariant #2 ("never hard-delete entities or facts").
 
-**Decision.** Add two reversible primitives (`src/entity_graph/curate.py`):
-1. **`merge(winner, loser)`** repoints the loser's relationships to the winner —
+**Decision.** Add three reversible primitives (`src/entity_graph/curate.py`):
+1. **`rename(entity, new_name)`** changes the canonical name and keeps the old
+   one as an alias (e.g. `Soong` → `T. V. Soong`).
+2. **`merge(winner, loser)`** repoints the loser's relationships to the winner —
    collapsing any that become duplicates (facts move to the surviving edge) —
    moves aliases and mentions over, and sets `merged_into`. The loser row stays.
    Repointing is *required*: `v_graph_edges` joins on `merged_into IS NULL` for
    **both** endpoints, so marking a merge without repointing would silently drop
    every edge incident to the loser.
-2. **`entities.is_hidden`** removes an entity *and its edges* from the graph
+3. **`entities.is_hidden`** removes an entity *and its edges* from the graph
    views while keeping the row and its facts. Used for non-actors.
    `entity-graph curate --file curation.json` applies a plan
-   (`{"merges": [[winner, loser], ...], "hide": [...], "unhide": [...]}`);
-   `--dry-run` previews it. No name in the plan is ever deleted.
+   (`{"renames": [[old, new]], "merges": [[winner, loser]], "hide": [...],
+   "unhide": [...]}`); `--dry-run` previews it. No name in the plan is ever
+   deleted.
 
 **Why.** A merge capability was genuinely missing — the curator queue could flag
 uncertain pairs but nothing could resolve them. Hiding is the minimal mechanism
