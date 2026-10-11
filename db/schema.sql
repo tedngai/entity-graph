@@ -165,7 +165,11 @@ CREATE INDEX IF NOT EXISTS idx_facts_current      ON facts (is_current) WHERE is
 
 -- ----------------------------------------------------------------------------
 -- Graph views: the stable contract consumed by NetworkX.
--- Merged entities (merged_into IS NOT NULL) are excluded.
+-- Merged entities (merged_into IS NOT NULL) are excluded, and so are isolated
+-- entities (no incident relationship): an edgeless node carries no network
+-- signal, and excluding it keeps analysis/visualization on the real graph.
+-- The `entities` rows are never deleted (invariant #2); they are only hidden
+-- from the view. See DECISIONS.md D18.
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_graph_nodes AS
 SELECT e.id,
@@ -174,7 +178,9 @@ SELECT e.id,
        e.description,
        e.attributes
 FROM entities e
-WHERE e.merged_into IS NULL;
+WHERE e.merged_into IS NULL
+  AND EXISTS (SELECT 1 FROM relationships r
+              WHERE r.source_id = e.id OR r.target_id = e.id);
 
 CREATE OR REPLACE VIEW v_graph_edges AS
 SELECT r.id              AS relationship_id,
