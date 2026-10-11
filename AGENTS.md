@@ -52,6 +52,10 @@ streaming ingestion, multi-tenant isolation.
   `v_graph_nodes` is **connected-only** — an entity with no incident
   relationship is hidden (D18). Entity rows are never deleted; only the view
   filters them.
+- **Curation**: `entity-graph curate --file` (D19) merges duplicates — repointing
+  the loser's edges onto the winner so none is lost — and hides non-actors via
+  `entities.is_hidden` (row and facts kept, excluded from the views). Both are
+  reversible; nothing is ever hard-deleted.
 
 ## 3. Commands (run from repo root)
 
@@ -64,6 +68,7 @@ entity-graph preprocess --input f.md --out f.clean.md  # clean OCR text only (no
 entity-graph extract                      # run extraction backend
 entity-graph resolve                      # entity resolution (+ Jev if API key set)
 entity-graph curator                      # list uncertain pairs queued by Jev alignment
+entity-graph curate --file curation.json  # merge duplicates / hide non-actors (reversible)
 entity-graph run --input data/samples     # full pipeline
 entity-graph analyze                      # NetworkX report to stdout
 entity-graph visualize                    # out/graph.html (pyvis)

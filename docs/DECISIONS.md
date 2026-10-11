@@ -557,4 +557,42 @@ now hide isolated entities. Existing databases pick up the view via
 `entity-graph init-db`; the extraction and normalization changes apply on the
 next extraction/resolution run.
 
+## D19 — Curation is two reversible primitives: merge (repoints edges) and hide
+**Status:** accepted · **Date:** 2026-10-11
+
+**Context.** The Shanghai book graph carried two kinds of noise. (a)
+**Duplicates** — `Soong` and `T. V. SOONG` (the latter mis-typed `CONCEPT`) are
+one person; so are `Tu` / `Tu Yueh-sheng`, `Lamont` / `Thomas W. Lamont`, and
+`Addis` / `Sir Charles Addis`. (b) **Non-actors** — generic concepts (`central
+bank`, `finance`, `banking`, `trust`, `GOVERNMENT`) and bibliography references
+(author/press pairs like `Fewsmith`–`University of Chicago`) that have edges but
+are not part of the network the book is about. There was no way to clean either
+without violating invariant #2 ("never hard-delete entities or facts").
+
+**Decision.** Add two reversible primitives (`src/entity_graph/curate.py`):
+1. **`merge(winner, loser)`** repoints the loser's relationships to the winner —
+   collapsing any that become duplicates (facts move to the surviving edge) —
+   moves aliases and mentions over, and sets `merged_into`. The loser row stays.
+   Repointing is *required*: `v_graph_edges` joins on `merged_into IS NULL` for
+   **both** endpoints, so marking a merge without repointing would silently drop
+   every edge incident to the loser.
+2. **`entities.is_hidden`** removes an entity *and its edges* from the graph
+   views while keeping the row and its facts. Used for non-actors.
+   `entity-graph curate --file curation.json` applies a plan
+   (`{"merges": [[winner, loser], ...], "hide": [...], "unhide": [...]}`);
+   `--dry-run` previews it. No name in the plan is ever deleted.
+
+**Why.** A merge capability was genuinely missing — the curator queue could flag
+uncertain pairs but nothing could resolve them. Hiding is the minimal mechanism
+for "persisted for provenance, but not a node", parallel to excluded types
+(D18). Both are reversible (set `merged_into`/`is_hidden` back), so curation is
+never destructive.
+
+**Consequences.** Migration 003 adds `is_hidden` and redefines
+`v_graph_nodes`/`v_graph_edges` to exclude hidden entities; existing databases
+pick it up via `entity-graph init-db`. The graph contract now hides merged,
+hidden, and isolated entities. Book-specific curation lives in
+`network_analysis/shanghai/` (not in this repo). Self-loops created by a merge
+are kept when they carry facts and dropped when they are childless.
+
 

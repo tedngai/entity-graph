@@ -46,8 +46,14 @@ CREATE TABLE IF NOT EXISTS entities (
     attributes     JSONB NOT NULL DEFAULT '{}',
     -- embedding     vector(1536),                  -- uncomment with pgvector
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    merged_into    BIGINT REFERENCES entities (id)   -- soft merge pointer (dedupe)
+    merged_into    BIGINT REFERENCES entities (id),  -- soft merge pointer (dedupe)
+    -- Curation flag: retained for provenance, excluded from the graph views.
+    -- For non-actors (generic concepts, bibliography references) that should
+    -- not be network nodes. Never delete; only hide. See DECISIONS.md D19.
+    is_hidden      BOOLEAN NOT NULL DEFAULT FALSE
 );
+-- Upgrade path for databases created before is_hidden existed.
+ALTER TABLE entities ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_entities_name_trgm
     ON entities USING gin (canonical_name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_entities_type ON entities (entity_type);
@@ -165,11 +171,11 @@ CREATE INDEX IF NOT EXISTS idx_facts_current      ON facts (is_current) WHERE is
 
 -- ----------------------------------------------------------------------------
 -- Graph views: the stable contract consumed by NetworkX.
--- Merged entities (merged_into IS NOT NULL) are excluded, and so are isolated
--- entities (no incident relationship): an edgeless node carries no network
--- signal, and excluding it keeps analysis/visualization on the real graph.
--- The `entities` rows are never deleted (invariant #2); they are only hidden
--- from the view. See DECISIONS.md D18.
+-- Merged entities (merged_into IS NOT NULL) and curated non-actors
+-- (is_hidden) are excluded, and so are isolated entities (no incident
+-- relationship): an edgeless node carries no network signal. The `entities`
+-- rows are never deleted (invariant #2); they are only hidden from the view.
+-- See DECISIONS.md D18 (connected-only) and D19 (curation).
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE VIEW v_graph_nodes AS
 SELECT e.id,
@@ -179,6 +185,7 @@ SELECT e.id,
        e.attributes
 FROM entities e
 WHERE e.merged_into IS NULL
+  AND NOT e.is_hidden
   AND EXISTS (SELECT 1 FROM relationships r
               WHERE r.source_id = e.id OR r.target_id = e.id);
 
@@ -196,5 +203,5 @@ SELECT r.id              AS relationship_id,
        (SELECT count(*) FROM facts f
          WHERE f.relationship_id = r.id AND f.is_current) AS fact_count
 FROM relationships r
-JOIN entities se ON se.id = r.source_id AND se.merged_into IS NULL
-JOIN entities te ON te.id = r.target_id AND te.merged_into IS NULL;
+JOIN entities se ON se.id = r.source_id AND se.merged_into IS NULL AND NOT se.is_hidden
+JOIN entities te ON te.id = r.target_id AND te.merged_into IS NULL AND NOT te.is_hidden;

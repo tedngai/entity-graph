@@ -43,6 +43,15 @@ def _parser() -> argparse.ArgumentParser:
 
     sub.add_parser("curator", help="list uncertain entity pairs queued by Jev alignment")
 
+    p_curate = sub.add_parser(
+        "curate",
+        help="merge duplicates / hide non-actors from a JSON curation file (never deletes)",
+    )
+    p_curate.add_argument("--file", required=True,
+                          help='JSON: {"merges": [[winner, loser], ...], "hide": [name, ...]}')
+    p_curate.add_argument("--dry-run", action="store_true",
+                          help="report what would change without applying it")
+
     p_build = sub.add_parser("build", help="promote relation proposals into relationships + facts")
     p_build.add_argument("--no-validate", action="store_true",
                          help="skip Jev relation validation (promote on extractor confidence)")
@@ -144,6 +153,20 @@ def main(argv: list[str] | None = None) -> int:
             for rid, name_a, type_a, name_b, type_b, score, sidecars in rows:
                 print(f"  #{rid}  {name_a!r} ({type_a})  ~?~  {name_b!r} ({type_b})  "
                       f"score={score}  {sidecars}")
+
+    elif args.command == "curate":
+        from .curate import apply_curation, load_curation
+        spec = load_curation(args.file)
+        summary = apply_curation(spec, config, dry_run=args.dry_run)
+        verb = "Would merge" if args.dry_run else "Merged"
+        for winner, loser, result in summary["merged"]:
+            print(f"  {verb}: {loser!r} -> {winner!r}  {result}")
+        for name in summary["hidden"]:
+            print(f"  {'Would hide' if args.dry_run else 'Hid'}: {name!r}")
+        for name in summary["unhidden"]:
+            print(f"  {'Would unhide' if args.dry_run else 'Unhid'}: {name!r}")
+        for item in summary["missing"]:
+            print(f"  MISSING: {item}")
 
     elif args.command == "build":
         from .pipeline import build
