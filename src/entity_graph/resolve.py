@@ -28,6 +28,11 @@ log = logging.getLogger(__name__)
 
 TRIGRAM_MIN_SIMILARITY = 0.45
 
+# Commit resolved mentions in batches so a crash or a dropped Jev connection
+# cannot discard hours of alignment work (the whole resolve ran in one
+# transaction before; one RemoteDisconnected rolled all of it back).
+RESOLVE_COMMIT_EVERY = 100
+
 
 def find_exact_or_alias(cur, surface: str) -> int | None:
     """Entity id for an exact canonical-name or alias hit, or None."""
@@ -210,7 +215,10 @@ def resolve_unresolved(config: Config | None = None) -> int:
             "FROM mentions m WHERE m.entity_id IS NULL ORDER BY m.id"
         )
         rows = cur.fetchall()
-        for mention_id, surface, entity_type, document_id, char_start in rows:
+        total = len(rows)
+        for index, (mention_id, surface, entity_type, document_id, char_start) in enumerate(
+            rows, start=1
+        ):
             entity_id = ensure_entity(
                 cur, surface, entity_type,
                 client=client, document_id=document_id, char_start=char_start,
@@ -219,6 +227,10 @@ def resolve_unresolved(config: Config | None = None) -> int:
                 "UPDATE mentions SET entity_id = %s WHERE id = %s", (entity_id, mention_id)
             )
             linked += 1
+            if index % RESOLVE_COMMIT_EVERY == 0:
+                conn.commit()
+                log.info("Resolved %d/%d mentions", index, total)
+        conn.commit()
     log.info("Resolved %d mentions", linked)
     return linked
 

@@ -36,8 +36,10 @@ via the OpenRouter mirror — see docs/RESEARCH.md §4b — and via the Pratt ro
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -92,12 +94,17 @@ class AlignmentVerdict:
 class SystemOneClient:
     """Minimal HTTP client for POST /v1/systemone (stdlib only)."""
 
-    def __init__(self, config: Config | None = None, timeout: float = 20.0) -> None:
+    def __init__(self, config: Config | None = None, timeout: float = 20.0,
+                 retries: int = 2) -> None:
         cfg = config or load_config()
         self.url = cfg.systemone_url
         self.api_key = cfg.systemone_api_key
         self.model = cfg.systemone_model
         self.timeout = timeout
+        # Transient network failures (a dropped connection, a 5xx) are retried
+        # this many times before surfacing as SystemOneError, which callers
+        # treat as "unavailable" and degrade past.
+        self.retries = retries
         # OpenRouter attribution headers (harmless for the native endpoint).
         self.headers = {}
         if cfg.openrouter_referer:
@@ -141,20 +148,34 @@ class SystemOneClient:
             headers=headers,
             method="POST",
         )
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            detail = ""
+        attempt = 0
+        while True:
             try:
-                detail = exc.read().decode("utf-8", "replace")[:800]
-            except Exception:  # noqa: BLE001 - best-effort diagnostics
-                pass
-            raise SystemOneError(
-                f"SystemOne call failed: HTTP {exc.code} {exc.reason}. {detail}"
-            ) from exc
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise SystemOneError(f"SystemOne call failed: {exc}") from exc
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                detail = ""
+                try:
+                    detail = exc.read().decode("utf-8", "replace")[:800]
+                except Exception:  # noqa: BLE001 - best-effort diagnostics
+                    pass
+                # A 5xx is worth retrying; a 4xx is not (bad key, bad request).
+                if exc.code >= 500 and attempt < self.retries:
+                    attempt += 1
+                    time.sleep(min(2.0, 0.5 * attempt))
+                    continue
+                raise SystemOneError(
+                    f"SystemOne call failed: HTTP {exc.code} {exc.reason}. {detail}"
+                ) from exc
+            except (OSError, http.client.HTTPException, json.JSONDecodeError) as exc:
+                # OSError covers URLError and http.client.RemoteDisconnected
+                # (a subclass of ConnectionResetError); HTTPException covers
+                # BadStatusLine. A dropped connection must not abort the run.
+                if attempt < self.retries:
+                    attempt += 1
+                    time.sleep(min(2.0, 0.5 * attempt))
+                    continue
+                raise SystemOneError(f"SystemOne call failed: {exc}") from exc
 
 
 def _get_answer(response: Any, question_id: str) -> Any:

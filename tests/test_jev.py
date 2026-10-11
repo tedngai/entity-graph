@@ -2,6 +2,12 @@
 (https://docs.typesafe.ai/api) with a stubbed ``decide``.
 """
 
+import http.client
+import json
+import urllib.request
+
+import pytest
+
 from entity_graph.config import Config
 from entity_graph.extract import jev
 
@@ -88,3 +94,58 @@ def test_numeric_answer_handles_missing_and_bare_values() -> None:
     assert jev._numeric_answer({"answers": {"q": 0.7}}, "q", "noul") == 0.7
     assert jev._numeric_answer({"answers": {}}, "q", "noul") is None
     assert jev._numeric_answer({"answers": {"q": {"type": "noul"}}}, "q", "noul") is None
+
+
+class _FakeResponse:
+    def __init__(self, payload: dict) -> None:
+        self._payload = payload
+
+    def __enter__(self) -> "_FakeResponse":
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
+    def read(self) -> bytes:
+        return json.dumps(self._payload).encode("utf-8")
+
+
+def test_decide_wraps_remote_disconnect_as_systemone_error(monkeypatch) -> None:
+    # A dropped connection (RemoteDisconnected) is an OSError/HTTPException, not
+    # a URLError; it must still surface as SystemOneError so callers degrade.
+    client = jev.SystemOneClient(Config(systemone_api_key="test-key"), retries=0)
+
+    def boom(*args, **kwargs):
+        raise http.client.RemoteDisconnected("Remote end closed connection without response")
+
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    with pytest.raises(jev.SystemOneError):
+        client.decide({"x": 1}, {"q": {"type": "noul", "instructions": "?"}})
+
+
+def test_decide_retries_transient_failure_then_succeeds(monkeypatch) -> None:
+    client = jev.SystemOneClient(Config(systemone_api_key="test-key"), retries=2)
+    calls = {"n": 0}
+
+    def flaky(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise http.client.RemoteDisconnected("drop")
+        return _FakeResponse({"answers": {"q": {"type": "noul", "noul": 0.5}}})
+
+    monkeypatch.setattr(urllib.request, "urlopen", flaky)
+    monkeypatch.setattr(jev.time, "sleep", lambda *_: None)
+    response = client.decide({"x": 1}, {"q": {"type": "noul", "instructions": "?"}})
+    assert response["answers"]["q"]["noul"] == 0.5
+    assert calls["n"] == 2
+
+
+def test_align_pair_degrades_when_decide_errors(monkeypatch) -> None:
+    client = jev.SystemOneClient(Config(systemone_api_key="test-key"))
+
+    def boom(state, questions):
+        raise jev.SystemOneError("network down")
+
+    monkeypatch.setattr(client, "decide", boom)
+    assert jev.align_pair(client, {"name": "A"}, {"name": "B"}) is None
+
