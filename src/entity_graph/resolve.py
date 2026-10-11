@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 from .chunking import split_sentences
 from .config import Config, load_config
@@ -32,6 +33,40 @@ TRIGRAM_MIN_SIMILARITY = 0.45
 # cannot discard hours of alignment work (the whole resolve ran in one
 # transaction before; one RemoteDisconnected rolled all of it back).
 RESOLVE_COMMIT_EVERY = 100
+
+_WHITESPACE = re.compile(r"\s+")
+_YEAR = re.compile(r"\b(1[5-9]\d{2}|20\d{2})\b")
+_EDGE_PUNCT = " \t\"'`.,;:()[]{}|"
+
+
+def normalize_surface(surface: str) -> str:
+    """Canonical surface: collapse whitespace and trim edge punctuation.
+
+    GLiNER2 can span a hard line break (``T. V.\\nSoong``) and OCR leaves
+    stray trailing punctuation; both would otherwise defeat exact/alias hits.
+    """
+    return _WHITESPACE.sub(" ", surface).strip().strip(_EDGE_PUNCT)
+
+
+def canonical_date(surface: str) -> str | None:
+    """The first four-digit year in a date-like surface, or None."""
+    match = _YEAR.search(surface)
+    return match.group(1) if match else None
+
+
+def match_surface(surface: str, entity_type: str | None = None) -> str:
+    """Key used for exact/alias/trigram matching and for the canonical name.
+
+    A DATE surface collapses to its first year, so ranges ("1928-1932") and
+    month variants ("March 1928") share one node instead of spawning one each;
+    the original surface is kept as an alias. Other types just normalize.
+    """
+    normalized = normalize_surface(surface)
+    if entity_type and str(entity_type).upper() == "DATE":
+        year = canonical_date(normalized)
+        if year:
+            return year
+    return normalized
 
 
 def find_exact_or_alias(cur, surface: str) -> int | None:
@@ -90,20 +125,21 @@ def _set_type_if_missing(cur, entity_id: int, entity_type: str | None) -> None:
 
 
 def _normalize_name(surface: str) -> str:
-    """Collapse internal whitespace (GLiNER2 can span a hard line break)."""
-    return " ".join(surface.split())
+    """Backwards-compatible alias for the whitespace/punctuation normalizer."""
+    return normalize_surface(surface)
 
 
 def _create_entity(cur, surface: str, entity_type: str | None) -> int:
-    canonical = _normalize_name(surface) or surface
+    canonical = match_surface(surface, entity_type) or surface
     cur.execute(
         "INSERT INTO entities (canonical_name, entity_type) VALUES (%s, %s) RETURNING id",
         (canonical, entity_type),
     )
     entity_id = cur.fetchone()[0]
     add_alias(cur, entity_id, canonical, source="extractor")
-    if canonical != surface:
-        add_alias(cur, entity_id, surface, source="extractor")
+    raw = normalize_surface(surface)
+    if raw and raw != canonical:
+        add_alias(cur, entity_id, raw, source="extractor")
     log.debug("Created entity %s for surface %r", entity_id, surface)
     return entity_id
 
@@ -155,12 +191,13 @@ def ensure_entity(cur, surface: str, entity_type: str | None = None,
     as-is unless a Jev client is enabled, in which case the pair is routed by
     Jev's alignment verdict (merge / curator / separate).
     """
-    exact = find_exact_or_alias(cur, surface)
+    key = match_surface(surface, entity_type)
+    exact = find_exact_or_alias(cur, key)
     if exact is not None:
         _set_type_if_missing(cur, exact, entity_type)
         return exact
 
-    fuzzy = find_trigram_candidate(cur, surface)
+    fuzzy = find_trigram_candidate(cur, key)
     if fuzzy is not None and client is not None and client.enabled:
         candidate_id, candidate_name, candidate_type = fuzzy
         mention_profile: dict = {"name": surface, "kind": entity_type}

@@ -182,8 +182,12 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
                 )
                 continue
 
-            src_id = entity_for_surface_in_doc(cur, src, doc_id) or ensure_entity(cur, src)
-            dst_id = entity_for_surface_in_doc(cur, dst, doc_id) or ensure_entity(cur, dst)
+            src_id = entity_for_surface_in_doc(cur, src, doc_id) or ensure_entity(
+                cur, src, source_type
+            )
+            dst_id = entity_for_surface_in_doc(cur, dst, doc_id) or ensure_entity(
+                cur, dst, target_type
+            )
             if src_id == dst_id:
                 log.debug("Skipping self-relation proposal %s (%s)", pid, src)
             else:
