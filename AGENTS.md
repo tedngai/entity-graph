@@ -96,9 +96,10 @@ py -m pytest                              # tests (no DB or network needed)
 6. Commit message: what changed and why, one or two sentences. Never commit
    `.env`, tokens, or credentials (see §8).
 7. **Push that commit to `origin` before starting the next slice.** Do not wait
-   to be asked. Authenticate with `GITHUB_PAT` from `.env` on that push only;
-   do not store the token in `.git/config`, and do not print it. If the push
-   fails, stop and say so. Do not force-push unless the user asks.
+   to be asked. Use the Basic `x-access-token` header in §8 (`GITHUB_PAT` from
+   `.env`). A Bearer header is rejected. Do not store the token in
+   `.git/config`, put it in the remote URL, or print it. If the push fails,
+   stop and say so. Do not force-push unless the user asks.
 8. When the task is done: update task `status="done"`, add a one-line `notes`,
    bump the root `updated` attribute, and commit and push that bookkeeping with
    the slice it describes (or as its own commit if the code is already committed).
@@ -135,6 +136,27 @@ are loaded into the environment by `entity_graph.config.load_config()`
 | `OPENROUTER_API_KEY` | Fallback provider for the LLM and Jev (OpenRouter mirror) |
 
 The Git remote is `origin` → `https://github.com/tedngai/entity-graph.git`.
-Every finished slice is pushed there (§6). Authenticate with `GITHUB_PAT` from
-`.env` on that push; do **not** commit the token, print it, or embed it in
+Every finished slice is pushed there (§6). The token is `GITHUB_PAT` in `.env`
+(classic `ghp_` PAT). Do **not** commit it, print it, or embed it in
 `.git/config`.
+
+This agent shell cannot use the Git Credential Manager dialog. A Bearer
+`http.extraheader` is rejected (`invalid credentials`). Push with Basic auth,
+username `x-access-token`, password the PAT, and scrub the token from any
+captured output before showing it:
+
+```powershell
+$pat = $null
+foreach ($line in Get-Content .env) {
+  if ($line -match '^\s*GITHUB_PAT\s*=\s*(.+)\s*$') {
+    $pat = $Matches[1].Trim().Trim('"').Trim("'")
+  }
+}
+$pair = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:${pat}"))
+$env:GIT_TERMINAL_PROMPT = '0'
+git -c "http.extraheader=AUTHORIZATION: basic $pair" push origin HEAD
+git status -sb   # confirm the branch is not ahead of origin
+```
+
+PowerShell may wrap git's stderr as a `NativeCommandError` even when the push
+succeeds. Trust `git status -sb`, not that wrapper.
