@@ -9,7 +9,14 @@ from pathlib import Path
 from .chunking import Chunk, chunk_text
 from .config import Config, load_config
 from .db import connect
-from .extract.base import ExtractionResult, Extractor, Mention, RelationProposal, get_extractor
+from .extract.base import (
+    ExtractionResult,
+    Extractor,
+    Mention,
+    RelationProposal,
+    get_extractor,
+    is_excluded_type,
+)
 from .graph_store import build_from_proposals, record_mention, record_proposal
 from .ingest import ingest_directory
 from .resolve import ensure_entity, resolve_unresolved
@@ -82,6 +89,28 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
     )
 
 
+def filter_extraction(result: ExtractionResult, exclude: frozenset[str] | set[str]) -> ExtractionResult:
+    """Drop mentions and relation proposals whose ontology type is excluded.
+
+    Excluded types (default: DATE) are not graph nodes. Their surface still
+    appears inside fact evidence quotes, so no provenance is lost. Proposals
+    are dropped only when an endpoint type is *known* to be excluded; a
+    proposal with an untyped endpoint is kept (a backend that does not type
+    endpoints cannot be filtered here).
+    """
+    if not exclude:
+        return result
+    mentions = [
+        m for m in result.mentions if not is_excluded_type(m.entity_type, exclude)
+    ]
+    relations = [
+        r for r in result.relations
+        if not is_excluded_type(r.source_type, exclude)
+        and not is_excluded_type(r.target_type, exclude)
+    ]
+    return ExtractionResult(doc_key=result.doc_key, mentions=mentions, relations=relations)
+
+
 def extract_documents(config: Config | None = None, force: bool = False) -> int:
     """Run the configured extractor over documents lacking mentions."""
     config = config or load_config()
@@ -101,6 +130,7 @@ def extract_documents(config: Config | None = None, force: bool = False) -> int:
                 continue
             log.info("Extracting %s with backend %r", doc_key, extractor.name)
             result = extract_document(extractor, text, doc_key, config)
+            result = filter_extraction(result, config.exclude_entity_types)
             for mention in result.mentions:
                 record_mention(cur, doc_id, mention.surface, mention.start, mention.end,
                                mention.entity_type, extractor.name, mention.confidence)

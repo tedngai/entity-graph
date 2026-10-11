@@ -13,6 +13,7 @@ from .config import Config, load_config
 from .db import connect
 from .extract.decide import judge_relations as decide_judge_relations
 from .extract.gate import should_promote
+from .extract.base import is_excluded_type
 from .extract.jev import (
     RELATION_VALIDATION_THRESHOLD,
     SystemOneClient,
@@ -152,7 +153,17 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
         verdicts = _judge_rows(config, client, rows)
 
         for (pid, doc_id, src, dst, relation, evidence, extractor, confidence,
-             _source_type, _target_type) in rows:
+             source_type, target_type) in rows:
+            # A proposal whose endpoint is an excluded ontology type (default
+            # DATE) is never promoted, so it cannot create a non-node entity.
+            if is_excluded_type(source_type, config.exclude_entity_types) or \
+                    is_excluded_type(target_type, config.exclude_entity_types):
+                cur.execute(
+                    "UPDATE relation_proposals SET status = 'rejected', gate = 'type' "
+                    "WHERE id = %s",
+                    (pid,),
+                )
+                continue
             judgment = verdicts.get(pid)
             assertion = judgment.assertion if judgment is not None else None
             modality = judgment.modality if judgment is not None else None

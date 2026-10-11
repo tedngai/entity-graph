@@ -8,6 +8,11 @@ from typing import Protocol, runtime_checkable
 ENTITY_TYPES = {"PERSON", "ORG", "PLACE", "CONCEPT", "EVENT", "DATE", "MISC"}
 
 
+def is_excluded_type(entity_type: str | None, exclude: frozenset[str] | set[str]) -> bool:
+    """True when an ontology type is configured out of the graph (e.g. DATE)."""
+    return bool(entity_type) and str(entity_type).upper() in exclude
+
+
 @dataclass
 class Mention:
     """A surface form found in a document, with char offsets into the raw text."""

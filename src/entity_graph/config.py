@@ -28,6 +28,12 @@ class Config:
     gliner_device: str = "auto"
     gliner_threshold: float = 0.4
 
+    # Ontology types that are NOT graph nodes. Dates (and any other listed
+    # type) are dropped at extraction so they never become entities; their
+    # surface still appears in fact evidence quotes, so provenance is intact.
+    # Default DATE; set EXCLUDE_ENTITY_TYPES= to keep everything.
+    exclude_entity_types: frozenset[str] = frozenset({"DATE"})
+
     # Local gate when Jev is not configured (GLiNER2.5-Decide). Device falls
     # back to GLINER_DEVICE. The model is loaded only at build time, and only
     # when no System One key is set.
@@ -125,6 +131,11 @@ def load_config() -> Config:
         gliner_model=env("GLINER_MODEL", "fastino/gliner2.5-base-v1"),
         gliner_device=env("GLINER_DEVICE", "auto"),
         gliner_threshold=float(env("GLINER_THRESHOLD", "0.4")),
+        exclude_entity_types=frozenset(
+            t.strip().upper()
+            for t in env("EXCLUDE_ENTITY_TYPES", "DATE").split(",")
+            if t.strip()
+        ),
         decide_model=env("DECIDE_MODEL", "fastino/GLiNER2.5-Decide"),
         decide_device=env("DECIDE_DEVICE", env("GLINER_DEVICE", "auto")),
         llm_url=env("LLM_URL", llm_url_default),
