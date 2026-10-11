@@ -67,7 +67,12 @@ def load_curation(path: str | Path) -> CurationSpec:
 
 
 def resolve_entity(cur, name: str) -> int | None:
-    """Live entity id for a canonical name or alias (case-insensitive)."""
+    """Live entity id for a canonical name or alias (case-insensitive).
+
+    An exact-case canonical-name match is preferred, so ``T. V. SOONG`` resolves
+    to the entity literally named that rather than to a ``T. V. Soong`` that
+    only matches case-insensitively.
+    """
     cur.execute(
         """
         SELECT e.id
@@ -76,7 +81,7 @@ def resolve_entity(cur, name: str) -> int | None:
           AND (lower(e.canonical_name) = lower(%s)
                OR EXISTS (SELECT 1 FROM entity_aliases a
                           WHERE a.entity_id = e.id AND lower(a.alias) = lower(%s)))
-        ORDER BY (lower(e.canonical_name) = lower(%s)) DESC, e.id
+        ORDER BY (e.canonical_name = %s) DESC, e.id
         LIMIT 1
         """,
         (name, name, name),
