@@ -98,3 +98,19 @@ py -m pytest                              # tests (no DB or network needed)
   (`/v1/chat/completions`, model `pratt-medium`).
 - `codesoda/systemone` (`s1 serve`) can host GLiNER2 behind a Jev-compatible
   API for fully-local development; evaluate it before scaling hosted calls.
+
+## 8. Credentials & secrets
+
+Secrets live in `.env` at the repo root — **gitignored, never committed** — and
+are loaded into the environment by `entity_graph.config.load_config()`
+(`python-dotenv`). Known variables:
+
+| Variable in `.env` | Used for |
+| --- | --- |
+| `GITHUB_PAT` | GitHub personal access token for pushing this repo |
+| `PRATT_LLM_API_KEY` | Pratt model router: LLM escalation (`pratt-medium`) + Jev (`pratt-jev`) |
+| `OPENROUTER_API_KEY` | Fallback provider for the LLM and Jev (OpenRouter mirror) |
+
+The Git remote is `origin` → `https://github.com/tedngai/entity-graph.git`.
+Authenticate pushes with `GITHUB_PAT`; do **not** commit the token or embed it in
+`.git/config` (pass it per-push instead).
