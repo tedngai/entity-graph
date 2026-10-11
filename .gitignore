@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# Env & secrets
+.env
+
+# Outputs
+out/
+
+# Data (keep samples/, ignore bulk drops)
+data/*
+!data/samples/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

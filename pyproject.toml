@@ -1,0 +1,35 @@
+[project]
+name = "entity-graph"
+version = "0.1.0"
+description = "Graph network analysis of entities and relationships: Postgres-backed fact store + NetworkX analytics, with extraction from unstructured documents (GLiNER2 / spaCy / Jev SystemOne decisions)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "psycopg[binary]>=3.2",
+    "python-dotenv>=1.0",
+    "pandas>=2.0",
+    "networkx>=3.3",
+]
+
+[project.optional-dependencies]
+extraction = [
+    "spacy>=3.7",
+    # GLiNER2 local inference (pulls torch + transformers). On Windows/PyPI this
+    # resolves a CPU torch; for CUDA, also run:
+    #   pip install torch --index-url https://download.pytorch.org/whl/cu130
+    "gliner2[local]",
+]
+viz = ["pyvis>=0.3"]
+ingest-pdf = ["pypdf>=4"]
+dev = ["pytest>=8", "pypdf>=4", "pyvis>=0.3"]
+
+[project.scripts]
+entity-graph = "entity_graph.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<progress project="entity-graph" updated="2026-10-11" phase="scaffold-complete">
+
+  <meta>
+    <goal>Extract entities and relationships from unstructured documents, store key facts with provenance in PostgreSQL, analyze and visualize the network with NetworkX.</goal>
+    <stack>Python 3.12 · PostgreSQL 16 (docker, pgvector image) · NetworkX · GLiNER2 (primary extractor) · spaCy (fallback) · Jev/SystemOne typed decisions · pyvis</stack>
+    <docs>
+      <doc id="AGENTS.md" purpose="agent operating manual and invariants"/>
+      <doc id="docs/RESEARCH.md" purpose="research findings and sources"/>
+      <doc id="docs/ARCHITECTURE.md" purpose="data flow, modules, contracts"/>
+      <doc id="docs/DECISIONS.md" purpose="decision records (ADRs)"/>
+      <doc id="db/schema.sql" purpose="authoritative PostgreSQL schema"/>
+    </docs>
+  </meta>
+
+  <phases>
+
+    <phase id="P0" name="Project setup" status="done">
+      <task id="P0.1" name="Create project folder and layout" status="done" notes="entity-graph/ with src layout"/>
+      <task id="P0.2" name="Tooling files (pyproject, docker-compose, .env.example, .gitignore)" status="done"/>
+      <task id="P0.3" name="Sample unstructured document for end-to-end runs" status="done" notes="data/samples/greengrid_partnership.txt"/>
+    </phase>
+
+    <phase id="P1" name="Research" status="done">
+      <task id="P1.1" name="Survey entity-extraction methods for unstructured docs" status="done" notes="Verdict: GLiNER2 primary, spaCy fallback, LLM escalation only. See RESEARCH.md §3"/>
+      <task id="P1.2" name="Evaluate Jev (SystemOne) for entity extraction support" status="done" notes="Confirmed real and a strong fit for typed decisions; official entity-alignment cookbook matches our entity-resolution step. See RESEARCH.md §4 and DECISIONS.md D3"/>
+      <task id="P1.3" name="Postgres graph-storage strategy" status="done" notes="Relational edge tables + recursive CTEs for v1; Apache AGE optional later. DECISIONS.md D1"/>
+      <task id="P1.4" name="NetworkX integration pattern" status="done" notes="Load v_graph_edges via pandas → nx.MultiDiGraph; louvain/centrality built in. RESEARCH.md §6"/>
+    </phase>
+
+    <phase id="P2" name="Database" status="done">
+      <task id="P2.1" name="Author schema (documents, entities, aliases, mentions, relationships, facts, graph views)" status="done" notes="db/schema.sql with pg_trgm; pgvector optional"/>
+      <task id="P2.2" name="Start Postgres via docker compose and verify pg_isready" status="done" notes="Resolved 2026-10-10: user added to docker-users + re-login; Docker Desktop 4.94.0 / Engine 29.8.2 up; container entity-graph-db healthy on :5432 (pgvector/pgvector:pg16)"/>
+      <task id="P2.3" name="entity-graph init-db applies schema; verify views" status="done" notes="init-db applied db/schema.sql; 7 tables + v_graph_nodes/v_graph_edges verified via psql. Fixed pre-existing bug: documents.checksum was non-unique but ingest.py uses ON CONFLICT (checksum) — made it UNIQUE (invariant #5). End-to-end run green (1 doc, 27 mentions, 9 edges, idempotent re-run)"/>
+    </phase>
+
+    <phase id="P3" name="Document ingestion" status="in-progress">
+      <task id="P3.1" name="Ingest .txt/.md with sha256 dedupe" status="done" notes="src/entity_graph/ingest.py"/>
+      <task id="P3.2" name="PDF ingestion via pypdf" status="done" notes="Optional extra [ingest-pdf]; gracefully skipped if not installed"/>
+      <task id="P3.3" name="Chunking strategy for long documents (sentence windows)" status="done" notes="src/entity_graph/chunking.py (split_sentences + chunk_text); pipeline.extract_document rebases offsets &amp; dedupes overlap; config CHUNK_* knobs; tests/test_chunking.py. DECISIONS.md D6"/>
+    </phase>
+
+    <phase id="P4" name="Entity &amp; relation extraction" status="done">
+      <task id="P4.1" name="Extractor contract (Mention/RelationProposal dataclasses + protocol)" status="done" notes="src/entity_graph/extract/base.py"/>
+      <task id="P4.2" name="Baseline heuristic extractor (capitalized spans + same-sentence relations)" status="done" notes="Zero-dependency; used by tests and first end-to-end run"/>
+      <task id="P4.3" name="spaCy extractor backend" status="done" notes="en_core_web_sm NER + dependency-path relations (LCA verb, subject->object, lemma map); deduped; actionable error if model missing. Verified live. See DECISIONS.md D11"/>
+      <task id="P4.4" name="GLiNER2 extractor backend (primary)" status="done" notes="gliner2 2.1.0 via AutoExtractor; schema create_schema().entities().relations(); extract(include_spans+confidence); config GLINER_MODEL/DEVICE/THRESHOLD. Runs on RTX 2000 Ada (torch 2.14.1+cu130): model load 5.5s, sample doc 0.69s, 41 mentions/27 relations, offsets exact. See DECISIONS.md D8"/>
+      <task id="P4.5" name="LLM escalation path for ambiguous documents" status="done" notes="LlmExtractor (OpenAI-compatible chat completions; Pratt router pratt-medium when PRATT_LLM_API_KEY is set, else OpenRouter gpt-4o-mini) + EscalatingExtractor wrapper (opt-in via EXTRACTION_ESCALATE/--escalate). Triggers: no mentions, no relations, majority low-confidence, or sparse relation density. Verified live: pure 'llm' backend end-to-end (gpt-4o-mini) and spaCy+escalate; Pratt pratt-medium verified live. See DECISIONS.md D11/D12"/>
+      <task id="P4.6" name="Persist mentions + proposed relations to Postgres" status="done" depends="P2.3" notes="pipeline.extract_documents already records mentions + relation_proposals; verified end-to-end with gliner2 (41 mentions, 27 proposals -> 27 facts persisted)"/>
+    </phase>
+
+    <phase id="P5" name="Entity resolution &amp; Jev decisions" status="done">
+      <task id="P5.1" name="Exact/alias/trigram resolution in SQL" status="done" notes="src/entity_graph/resolve.py"/>
+      <task id="P5.2" name="Jev SystemOne client (Choice/Score/Noul over POST /v1/systemone)" status="done" notes="src/entity_graph/extract/jev.py; Pratt router (/v1/systemone, pratt-jev) and OpenRouter mirror supported"/>
+      <task id="P5.3" name="Entity alignment via Jev Score routing (separate / curator / merge)" status="done" notes="resolve.ensure_entity routes fuzzy (trigram) candidates through align_pair; merge links + alias, curator creates + queues, separate creates. Verified live: 'Maria Chen' vs 'Dr. Maria Chen' score 1.84 -> merge. See DECISIONS.md D9"/>
+      <task id="P5.4" name="Relation validation via Jev Noul (does the evidence sentence assert this?)" status="done" notes="graph_store.build_from_proposals Noul-scores pending proposals in batched calls (&lt;=25/request); noul&lt;0.5 -&gt; status='rejected'. Sample: 14 candidates -> 9 promoted (all correct), 5 real falsehoods rejected. See DECISIONS.md D9"/>
+      <task id="P5.5" name="Curator queue surface for score==1 (uncertain) pairs" status="done" notes="curator_queue table + `entity-graph curator` CLI lists pending pairs"/>
+      <task id="P5.6" name="Verify Jev request/response fields against live API" status="done" notes="LIVE-verified 2026-10-11 via OpenRouter mirror (model typesafe/jev-1.13-20260917): noul/choice/score all match documented shape; ~$0.00002/call; batched Noul == single-call accuracy. Also verified via Pratt router (POST /v1/systemone, model pratt-jev): alignment score 1.84 -> merge, noul 0.99/0.02 for a claim and its reverse. See RESEARCH.md §4b, DECISIONS.md D12"/>
+    </phase>
+
+    <phase id="P6" name="Graph store &amp; NetworkX" status="in-progress">
+      <task id="P6.1" name="load_graph(): v_graph_nodes/v_graph_edges → nx.MultiDiGraph" status="done" notes="src/entity_graph/graph_store.py"/>
+      <task id="P6.2" name="Write path: upsert entities/relationships/facts from extraction results" status="done" notes="Stub-level; exercised after P4.6"/>
+      <task id="P6.3" name="Incremental sync + recalc of aggregate edge stats" status="todo"/>
+    </phase>
+
+    <phase id="P7" name="Analysis &amp; visualization" status="todo">
+      <task id="P7.1" name="analyze.py: degree/betweenness/eigenvector centrality + louvain communities" status="done" notes="CLI report to stdout"/>
+      <task id="P7.2" name="visualize.py: pyvis interactive HTML with type-based colors" status="done" notes="Requires [viz] extra"/>
+      <task id="P7.3" name="Static matplotlib figures for reports" status="todo"/>
+      <task id="P7.4" name="Temporal analysis (facts valid_from/valid_to)" status="todo"/>
+    </phase>
+
+    <phase id="P8" name="Hardening" status="todo">
+      <task id="P8.1" name="Extraction quality eval set (golden facts) + precision/recall report" status="todo"/>
+      <task id="P8.2" name="Batch performance test on 100+ docs; tune GLiNER2 thresholds" status="todo"/>
+      <task id="P8.3" name="Decision: adopt Apache AGE or stay on CTEs (only if traversal-heavy queries emerge)" status="todo"/>
+    </phase>
+
+  </phases>
+
+  <decisions>
+    <decision id="D1" title="Relational edge tables + CTEs now, Apache AGE later if needed" ref="docs/DECISIONS.md#d1"/>
+    <decision id="D2" title="GLiNER2 primary extractor; spaCy fallback; LLM only for escalation" ref="docs/DECISIONS.md#d2"/>
+    <decision id="D3" title="Use Jev (SystemOne) for calibrated typed decisions in the extraction pipeline" ref="docs/DECISIONS.md#d3"/>
+    <decision id="D4" title="Reified facts with provenance; relationships are an aggregate view" ref="docs/DECISIONS.md#d4"/>
+    <decision id="D5" title="NetworkX loads only from graph views; pyvis for interactive output" ref="docs/DECISIONS.md#d5"/>
+    <decision id="D6" title="Long documents: overlapping sentence windows with rebased offsets" ref="docs/DECISIONS.md#d6"/>
+    <decision id="D7" title="Jev is not the extractor; keep a local span model for candidates" ref="docs/DECISIONS.md#d7"/>
+    <decision id="D8" title="GLiNER2 backend uses AutoExtractor + gliner2.5-base-v1; CUDA torch from the PyTorch index" ref="docs/DECISIONS.md#d8"/>
+    <decision id="D9" title="Jev integration: alignment routing, batched Noul validation, OpenRouter inference" ref="docs/DECISIONS.md#d9"/>
+    <decision id="D10" title="Sentence boundaries at paragraph breaks, not single newlines" ref="docs/DECISIONS.md#d10"/>
+    <decision id="D11" title="LLM escalation is an opt-in wrapper over the cheap extractor" ref="docs/DECISIONS.md#d11"/>
+  </decisions>
+
+  <risks>
+    <risk id="R1" title="Jev API contract drift (young product)" mitigation="Client isolated in one module; verify against live API in P5.6; codesoda/systemone offers a compatible local adapter"/>
+    <risk id="R2" title="GLiNER2 install weight (torch) on this Windows box" mitigation="Baseline extractor keeps pipeline runnable; GLiNER2 optional extra"/>
+    <risk id="R3" title="Over-merging entities is costlier than under-merging" mitigation="Jev alignment uses the 3-outcome Score routing with a curator queue (P5.5), never a bare threshold"/>
+  </risks>
+
+</progress>
