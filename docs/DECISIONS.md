@@ -515,4 +515,46 @@ wall time (sequential single-claim requests). It misses a different fact than
 Jev, so it is a peer, not a superset. New profiles are additive; the default is
 untouched. See `docs/RESEARCH.md` §4d-i.
 
+## D18 — Non-node types are dropped, the graph view is connected-only, surfaces are normalized
+**Status:** accepted · **Date:** 2026-10-11
+
+**Context.** The Shanghai book run produced 4,191 entities for one book, but
+**3,589 had no edges**: `DATE` 918/918 and `CONCEPT` 1,293/1,306 were ~100%
+isolated, as were most `EVENT` (377/396) and `PLACE` (165/210). The meaningful
+graph was ~602 connected entities / 990 edges. Three mechanisms inflated the
+count: (a) extraction emitted `DATE` and `CONCEPT` mentions as entities; (b)
+near-duplicate dates never merged — `1928`, `1928-1932`, `March 1928` each got
+their own entity, partly because alignment routes such pairs to `curator`
+(which *creates* a new entity); (c) `v_graph_nodes` exposed every entity, so
+analysis and visualization saw 4,191 nodes.
+
+**Decision.**
+1. **Excluded ontology types** (`EXCLUDE_ENTITY_TYPES`, default `DATE`) are
+   dropped at the extraction boundary: `pipeline.filter_extraction` removes
+   mentions of an excluded type and any *typed* proposal with an excluded
+   endpoint, and `build_from_proposals` refuses to promote a proposal whose
+   endpoint type is excluded. Excluded surfaces still appear inside fact
+   `evidence_text`, so provenance is intact. Storing dates as `facts.valid_from`
+   is deferred to temporal analysis (P7.4).
+2. **`v_graph_nodes` is connected-only**: an entity with no incident
+   relationship is hidden from the view. Entity rows are never deleted
+   (invariant #2); only the contract view filters them (migration 002).
+3. **Surface normalization** before resolution: `normalize_surface` collapses
+   whitespace and trims edge punctuation; `match_surface` additionally reduces a
+   `DATE` surface to its first year, so ranges and month variants share a node
+   (the original surface is kept as an alias).
+
+**Why.** An edgeless node carries no network signal, and dates are attributes of
+events, not actors. Dropping them at the boundary — rather than post-hoc —
+means they never pollute mention counts, resolution calls, or the graph.
+Normalization cuts duplicate entity creation without a schema change.
+
+**Consequences.** Book run: 4,191 entity rows → **602 connected nodes**, edges
+unchanged at 990. `EXCLUDE_ENTITY_TYPES=` restores the old extraction behavior;
+`DATE,CONCEPT` drops concepts too. The view change is a *contract* change
+(invariant #4): code still reads through `v_graph_nodes`/`v_graph_edges`, which
+now hide isolated entities. Existing databases pick up the view via
+`entity-graph init-db`; the extraction and normalization changes apply on the
+next extraction/resolution run.
+
 

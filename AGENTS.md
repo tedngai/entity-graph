@@ -33,6 +33,10 @@ streaming ingestion, multi-tenant isolation.
 - **Ingestion**: OCR documents are cleaned at ingest (`preprocess.py`, D16) —
   page scaffolding, footnote markers, page-break rejoin, and de-hyphenation —
   before storage, so offsets/evidence index the cleaned text.
+- **Ontology types that are not nodes** are dropped at extraction
+  (`EXCLUDE_ENTITY_TYPES`, default `DATE`, D18): their mentions and typed
+  proposals never reach the database, and `build` refuses to promote a proposal
+  with an excluded endpoint type. Their surface still appears in fact evidence.
 - **Jev / System One (TypeSafe)**: typed decision calls for entity alignment,
   type arbitration, and relation validation — see `src/entity_graph/extract/jev.py`
   and `docs/RESEARCH.md` §4. It returns `Choice`/`Score`/`Noul` decisions, it is
@@ -45,6 +49,9 @@ streaming ingestion, multi-tenant isolation.
   gold-set report and a new decision record (D15).
 - **Analytics**: NetworkX (`MultiDiGraph`), loaded only through
   `graph_store.load_graph()` which reads `v_graph_nodes` / `v_graph_edges`.
+  `v_graph_nodes` is **connected-only** — an entity with no incident
+  relationship is hidden (D18). Entity rows are never deleted; only the view
+  filters them.
 
 ## 3. Commands (run from repo root)
 

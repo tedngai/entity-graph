@@ -437,3 +437,27 @@ Sources: [Labelyourdata — OCR preprocessing for NLP](https://labelyourdata.com
 - **pyvis** — interactive HTML with type-based coloring (chosen; optional extra).
 - matplotlib + `nx.draw_spring` for static figures in reports.
 - Deferred: Graphistry/Cytoscape/Memgraph consoles — unnecessary for v1.
+
+## 8. Entity quality on a full book (2026-10-11)
+
+The Shanghai book (655 KB → 1,272 chunks) yielded 14,873 mentions and 4,191
+entities, but the graph had only **990 edges among 602 connected entities** —
+3,589 entities had no edge at all. Isolated rate by type:
+
+| type | isolated | total | % isolated |
+|---|---|---|---|
+| DATE | 918 | 918 | 100% |
+| CONCEPT | 1,293 | 1,306 | 99% |
+| EVENT | 377 | 396 | 95% |
+| PLACE | 165 | 210 | 79% |
+| ORG | 509 | 807 | 63% |
+| PERSON | 327 | 554 | 59% |
+
+Two causes: extraction emits `DATE`/`CONCEPT` mentions as entities, and
+near-duplicate surfaces (``1928``, ``1928-1932``, ``March 1928``) each became a
+separate entity — alignment routes near-duplicates to ``curator``, which
+*creates* a new entity rather than merging. The gate itself was sound: of 1,505
+rejected proposals, the 29 with a high assertion (≥ 0.5) were all correctly
+caught by modality (``possibility``: "may have", "could", "rumored";
+``forecast``: "would be required") or by non-prose evidence (headers, tables,
+citations). See `docs/DECISIONS.md` D18 for the fixes.

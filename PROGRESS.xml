@@ -66,6 +66,7 @@
       <task id="P6.1" name="load_graph(): v_graph_nodes/v_graph_edges → nx.MultiDiGraph" status="done" notes="src/entity_graph/graph_store.py"/>
       <task id="P6.2" name="Write path: upsert entities/relationships/facts from extraction results" status="done" notes="Stub-level; exercised after P4.6"/>
       <task id="P6.3" name="Incremental sync + recalc of aggregate edge stats" status="todo"/>
+      <task id="P6.4" name="Graph hygiene: drop non-node types, connected-only view, surface normalization" status="done" notes="EXCLUDE_ENTITY_TYPES (default DATE) filters mentions + typed proposals at extraction and blocks promotion in build; v_graph_nodes now requires an incident relationship (migration 002, entity rows kept); resolve.normalize_surface/match_surface collapse whitespace/edge punctuation and date ranges. Book run 4,191 entities -> 602 connected nodes, edges 990. tests/test_type_filter.py, tests/test_normalize.py. DECISIONS.md D18"/>
     </phase>
 
     <phase id="P7" name="Analysis &amp; visualization" status="todo">
@@ -101,6 +102,7 @@
     <decision id="D15" title="Gold facts before any cutoff change; 0.5 stays frozen" ref="docs/DECISIONS.md#d15"/>
     <decision id="D16" title="OCR text is preprocessed at ingest; the document is its own de-hyphenation dictionary" ref="docs/DECISIONS.md#d16"/>
     <decision id="D17" title="Relation prompts are a selectable profile; the local Clef model is calibrated opt-in" ref="docs/DECISIONS.md#d17"/>
+    <decision id="D18" title="Non-node types are dropped, the graph view is connected-only, surfaces are normalized" ref="docs/DECISIONS.md#d18"/>
   </decisions>
 
   <risks>
