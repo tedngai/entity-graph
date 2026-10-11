@@ -47,8 +47,12 @@ Orchestrated by `pipeline.py`, exposed through `cli.py`
 | `extract/base.py` | Contract: `Mention`, `RelationProposal`, `ExtractionResult`, `Extractor` protocol + registry |
 | `extract/baseline_extractor.py` | Zero-dep heuristic extractor (capitalized spans, same-sentence `RELATED_TO`) — for tests and first runs |
 | `extract/spacy_extractor.py` | spaCy backend (skeleton; needs `pip install -e .[extraction]` + model) |
-| `extract/gliner_extractor.py` | GLiNER2 backend (skeleton; primary extraction path) |
-| `extract/jev.py` | SystemOne client: `decide()` + `align_pair()` (official entity-alignment pattern) + `validates_relation()` |
+| `extract/ontology.py` | Shared entity/relation schema for JointIE and the Decide gate |
+| `extract/gliner_extractor.py` | GLiNER2.5 JointIE backend (primary). Independent `.relations()` only if `joint_ie` is missing |
+| `extract/gate.py` | Pure promotion rule (`should_promote`). Does not call a model |
+| `extract/decide.py` | Local GLiNER2.5-Decide gate, used only when Jev is not configured |
+| `extract/jev.py` | SystemOne client: `decide()` + `align_pair()` + `judge_relations()` (Noul + modality Choice) |
+| `eval_facts.py` | Gold-fact scorer. Prints a threshold sweep; never writes the frozen cutoff |
 | `resolve.py` | Mention → entity: exact/alias/trigram SQL; creates canonical entities; hook for Jev alignment verdicts |
 | `graph_store.py` | Write path (`upsert_*`, `record_fact`) + read path (`load_graph()` → `nx.MultiDiGraph`) |
 | `analyze.py` | NetworkX report: size, density, centralities, louvain communities |
@@ -60,7 +64,8 @@ Orchestrated by `pipeline.py`, exposed through `cli.py`
 ### Extraction contract (`extract/base.py`)
 ```python
 Mention(surface, entity_type, start, end, confidence)     # char offsets into doc text
-RelationProposal(source_surface, target_surface, relation, evidence, confidence)
+RelationProposal(source_surface, target_surface, relation, evidence, confidence,
+                 source_type="", target_type="")       # ontology labels when known
 ExtractionResult(doc_key, mentions, relations)
 Extractor.name: str
 Extractor.extract(text: str) -> ExtractionResult
@@ -88,8 +93,14 @@ mentions/evidence are still seen; see `docs/DECISIONS.md` D6.
 - `align_pair(a, b) -> "separate" | "curator" | "merge"` — Score routing
   (round to nearest labeled level, **no thresholds**), Noul sidecars per field.
 - `validates_relation(evidence, s, rel, o) -> float` — Noul probability.
-- All Jev settings come from config; empty `SYSTEMONE_API_KEY` disables the
-  feature (resolution falls back to exact/alias matching).
+- `judge_relations(claims) -> {id: RelationJudgment}` — assertion Noul plus a
+  modality Choice (`fact` / `possibility` / `denial` / `forecast` / `not_stated`).
+- All Jev settings come from config. With no key, entity resolution falls back
+  to exact/alias/trigram. Relation promotion then uses the local Decide gate
+  (`extract/decide.py`) if `gliner2` is installed, otherwise extractor confidence.
+- `should_promote` rejects a scored claim when modality is not `fact`, Decide
+  disagrees with the proposed relation, or (Jev only) the assertion Noul is
+  below the frozen cutoff. It does not tune that cutoff.
 
 ## 4. Confidence semantics
 `confidence` columns are always [0,1]. Jev `Noul` outputs map directly; Jev

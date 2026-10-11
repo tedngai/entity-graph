@@ -52,6 +52,31 @@ def _parser() -> argparse.ArgumentParser:
     p_run.add_argument("--escalate", action="store_true",
                        help="escalate uncertain documents to the LLM (needs an LLM key)")
 
+    p_eval = sub.add_parser(
+        "eval",
+        help="score predictions against the gold fact set (does not tune thresholds)",
+    )
+    p_eval.add_argument(
+        "--gold",
+        default="data/gold/greengrid_partnership.jsonl",
+        help="JSONL gold facts (fact / nonfact / trap)",
+    )
+    p_eval.add_argument(
+        "--predictions",
+        default=None,
+        help="JSON list or JSONL of {subject, relation, object} triples",
+    )
+    p_eval.add_argument(
+        "--sample",
+        default=None,
+        help="source text used to check that gold evidence quotes are substrings",
+    )
+    p_eval.add_argument(
+        "--from-db",
+        action="store_true",
+        help="score current facts already stored in Postgres",
+    )
+
     return parser
 
 
@@ -135,7 +160,103 @@ def main(argv: list[str] | None = None) -> int:
         if graph.number_of_nodes():
             print()
             print(format_report(analyze_graph(graph)))
+
+    elif args.command == "eval":
+        return _eval(args, config)
     return 0
+
+
+def _eval(args, config) -> int:
+    """Validate the gold file and, if predictions are given, score them.
+
+    Never writes RELATION_VALIDATION_THRESHOLD. A sweep is printed so a later
+    decision record can justify a change.
+    """
+    from .eval_facts import (
+        evidence_missing,
+        format_report,
+        load_gold,
+        load_predictions,
+        score_predictions,
+        threshold_sweep,
+    )
+    from .extract.jev import RELATION_VALIDATION_THRESHOLD
+
+    gold_path = Path(args.gold)
+    if not gold_path.exists():
+        print(f"Gold file not found: {gold_path}")
+        return 1
+    gold = load_gold(gold_path)
+
+    sample = Path(args.sample) if args.sample else None
+    if sample is None and gold and gold[0].doc:
+        candidate = Path("data/samples") / Path(gold[0].doc).name
+        if candidate.exists():
+            sample = candidate
+    if sample is not None and sample.exists():
+        missing = evidence_missing(gold, sample.read_text(encoding="utf-8"))
+        if missing:
+            print(f"Gold evidence not found in {sample}:")
+            for quote in missing:
+                print(f"  {quote!r}")
+            return 1
+
+    predictions = None
+    if args.predictions:
+        predictions = load_predictions(args.predictions)
+    elif args.from_db:
+        predictions = _facts_from_db(config)
+        if predictions is None:
+            print(format_report(gold, None, None, threshold=RELATION_VALIDATION_THRESHOLD))
+            return 1
+
+    if predictions is None:
+        print(format_report(gold, None, None, threshold=RELATION_VALIDATION_THRESHOLD))
+        if sample is not None and sample.exists():
+            print(f"Evidence quotes checked against {sample}.")
+        print("Pass --predictions triples.jsonl to score extractor output.")
+        return 0
+
+    scored = score_predictions(
+        gold, predictions, threshold=RELATION_VALIDATION_THRESHOLD,
+    )
+    sweep = threshold_sweep(gold, predictions) if any(
+        row.get("assertion") is not None for row in predictions
+    ) else None
+    print(format_report(gold, scored, sweep, threshold=RELATION_VALIDATION_THRESHOLD))
+    return 0
+
+
+def _facts_from_db(config) -> list[dict] | None:
+    """Current stored facts as prediction rows. None if Postgres is unreachable."""
+    from .db import connect
+
+    try:
+        with connect(config) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT se.canonical_name, r.relation, te.canonical_name, d.doc_key
+                FROM facts f
+                JOIN relationships r ON r.id = f.relationship_id
+                JOIN entities se ON se.id = r.source_id
+                JOIN entities te ON te.id = r.target_id
+                LEFT JOIN documents d ON d.id = f.document_id
+                WHERE f.is_current
+                """
+            )
+            rows = cur.fetchall()
+    except Exception as exc:  # noqa: BLE001 - offline eval must not require a database
+        print(f"Could not read facts from Postgres ({exc}).")
+        return None
+    return [
+        {
+            "subject": subject,
+            "relation": relation,
+            "object": obj,
+            "doc": Path(path).name if path else "",
+        }
+        for subject, relation, obj, path in rows
+    ]
 
 
 if __name__ == "__main__":

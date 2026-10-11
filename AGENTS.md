@@ -21,14 +21,18 @@ streaming ingestion, multi-tenant isolation.
 - **Schema**: `db/schema.sql` is the single source of truth. Migrations are
   new numbered files in `db/migrations/` once the first migration exists.
 - **Extraction**: pluggable backends implementing `entity_graph.extract.base.Extractor`
-  (`baseline` → `spacy` → `gliner2` → `llm`). Primary research-backed choice is
-  GLiNER2; spaCy is a lightweight fallback; the LLM backend is an **opt-in
+  (`baseline` → `spacy` → `gliner2` → `llm`). Primary path is GLiNER2.5
+  **JointIE** (`extract/ontology.py` + `extract/gliner_extractor.py`, D13).
+  spaCy is a lightweight fallback; the LLM backend is an **opt-in
   escalation wrapper** (`EscalatingExtractor`) over a cheap backend, never the
   default (D2, D11).
 - **Jev / System One (TypeSafe)**: typed decision calls for entity alignment,
   type arbitration, and relation validation — see `src/entity_graph/extract/jev.py`
   and `docs/RESEARCH.md` §4. It returns `Choice`/`Score`/`Noul` decisions, it is
-  **not** an NER model and never generates spans.
+  **not** an NER model and never generates spans. Relation judgment is a Noul
+  plus a modality Choice (D14). With no key, `extract/decide.py` is the local
+  gate. Do not tune `RELATION_VALIDATION_THRESHOLD` without a gold-set report
+  and a new decision record (D15).
 - **Analytics**: NetworkX (`MultiDiGraph`), loaded only through
   `graph_store.load_graph()` which reads `v_graph_nodes` / `v_graph_edges`.
 
@@ -45,6 +49,7 @@ entity-graph curator                      # list uncertain pairs queued by Jev a
 entity-graph run --input data/samples     # full pipeline
 entity-graph analyze                      # NetworkX report to stdout
 entity-graph visualize                    # out/graph.html (pyvis)
+entity-graph eval                         # gold-fact report; does not tune thresholds
 py -m pytest                              # tests (no DB or network needed)
 ```
 

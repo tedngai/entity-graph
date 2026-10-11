@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..config import Config, load_config
+from .gate import RelationJudgment, normalize_modality
 
 log = logging.getLogger(__name__)
 
@@ -63,10 +64,22 @@ ALIGNMENT_CRITERIA = [
     "same entity: name, kind and context agree -> assert merge (sameAs)",
 ]
 
-# A relation proposal whose Jev Noul ("does the evidence assert this?") falls
-# below this value is rejected rather than promoted. Proposals Jev could not
-# score (disabled / error) are promoted on the extractor's own confidence.
+# FROZEN. A relation proposal whose Jev Noul ("does the evidence assert this?")
+# falls below this value is rejected rather than promoted. Proposals Jev could
+# not score (disabled / error) are promoted on the extractor's own confidence.
+# Do not tune this from a single sample. `entity-graph eval` reports a sweep
+# against data/gold/; changing the constant requires a new decision record (D15).
 RELATION_VALIDATION_THRESHOLD = 0.5
+
+# Short Choice labels for the modality question asked beside the assertion Noul.
+# Argmax only — the promotion rule does not threshold these probabilities.
+MODALITY_CRITERIA = {
+    "fact": "The evidence states this as something that happened or is true.",
+    "possibility": "The evidence only says this might happen or could be true.",
+    "denial": "The evidence says this did not happen or will not happen.",
+    "forecast": "The evidence says this is planned or expected, not yet done.",
+    "not_stated": "The evidence does not state this claim.",
+}
 
 
 @dataclass
@@ -266,6 +279,80 @@ def validate_relations(
             value = _numeric_answer(response, f"claim_{claim['id']}", "noul")
             if value is not None:
                 verdicts[claim["id"]] = value
+    return verdicts
+
+
+def _choice_answer(response: Any, question_id: str) -> str | None:
+    """Extract ``answers[id].choice``. A bare string is tolerated."""
+    answer = _get_answer(response, question_id)
+    if isinstance(answer, dict):
+        value = answer.get("choice")
+    elif isinstance(answer, str):
+        value = answer
+    else:
+        value = None
+    text = str(value).strip() if value is not None else ""
+    return text or None
+
+
+def judge_relations(
+    client: SystemOneClient, claims: list[dict], batch_size: int = 12
+) -> dict[int, RelationJudgment]:
+    """Noul-validate claims and ask a modality Choice in the same request.
+
+    ``claims`` items match ``validate_relations``. Modality is a separate
+    question id so it sits beside the assertion Noul rather than replacing it.
+    A claim the API does not answer is omitted (treated as unscored).
+    """
+    if not client.enabled or not claims:
+        return {}
+    verdicts: dict[int, RelationJudgment] = {}
+    for start in range(0, len(claims), batch_size):
+        batch = claims[start : start + batch_size]
+        state = {
+            "task": "For each claim, decide whether its evidence asserts the "
+                    "relation, and what kind of statement that evidence is.",
+            "claims": batch,
+        }
+        questions: dict[str, dict] = {}
+        for claim in batch:
+            claim_id = claim["id"]
+            questions[f"claim_{claim_id}"] = {
+                "type": "noul",
+                "instructions": (
+                    f"For claim `claim_{claim_id}`, probability that its "
+                    f"`evidence` asserts that its `subject` "
+                    f"{str(claim['relation']).lower().replace('_', ' ')} "
+                    f"its `object`? Answer for that claim only."
+                ),
+            }
+            questions[f"modality_{claim_id}"] = {
+                "type": "choice",
+                "instructions": (
+                    f"For claim `claim_{claim_id}`, what kind of statement is "
+                    f"its evidence about that claim?"
+                ),
+                "criteria": MODALITY_CRITERIA,
+            }
+        try:
+            response = client.decide(state, questions)
+        except SystemOneError as exc:
+            log.warning("Jev relation judgment unavailable (%s)", exc)
+            continue
+        for claim in batch:
+            claim_id = int(claim["id"])
+            assertion = _numeric_answer(response, f"claim_{claim_id}", "noul")
+            modality = normalize_modality(
+                _choice_answer(response, f"modality_{claim_id}")
+            )
+            if assertion is None and modality is None:
+                continue
+            verdicts[claim_id] = RelationJudgment(
+                assertion=assertion,
+                modality=modality,
+                agrees=None,
+                source="jev",
+            )
     return verdicts
 
 

@@ -3,7 +3,7 @@
 
   <meta>
     <goal>Extract entities and relationships from unstructured documents, store key facts with provenance in PostgreSQL, analyze and visualize the network with NetworkX.</goal>
-    <stack>Python 3.12 · PostgreSQL 16 (docker, pgvector image) · NetworkX · GLiNER2 (primary extractor) · spaCy (fallback) · Jev/SystemOne typed decisions · pyvis</stack>
+    <stack>Python 3.12 · PostgreSQL 16 (docker, pgvector image) · NetworkX · GLiNER2.5 JointIE (primary extractor) · spaCy (fallback) · Jev/SystemOne typed decisions · GLiNER2.5-Decide local gate · pyvis</stack>
     <docs>
       <doc id="AGENTS.md" purpose="agent operating manual and invariants"/>
       <doc id="docs/RESEARCH.md" purpose="research findings and sources"/>
@@ -44,7 +44,8 @@
       <task id="P4.1" name="Extractor contract (Mention/RelationProposal dataclasses + protocol)" status="done" notes="src/entity_graph/extract/base.py"/>
       <task id="P4.2" name="Baseline heuristic extractor (capitalized spans + same-sentence relations)" status="done" notes="Zero-dependency; used by tests and first end-to-end run"/>
       <task id="P4.3" name="spaCy extractor backend" status="done" notes="en_core_web_sm NER + dependency-path relations (LCA verb, subject->object, lemma map); deduped; actionable error if model missing. Verified live. See DECISIONS.md D11"/>
-      <task id="P4.4" name="GLiNER2 extractor backend (primary)" status="done" notes="gliner2 2.1.0 via AutoExtractor; schema create_schema().entities().relations(); extract(include_spans+confidence); config GLINER_MODEL/DEVICE/THRESHOLD. Runs on RTX 2000 Ada (torch 2.14.1+cu130): model load 5.5s, sample doc 0.69s, 41 mentions/27 relations, offsets exact. See DECISIONS.md D8"/>
+      <task id="P4.4" name="GLiNER2 extractor backend (primary)" status="done" notes="JointIE on fastino/gliner2.5-base-v1 with typed endpoints from extract/ontology.py (D13). Independent .relations() remains only if gliner2.joint_ie is missing. Earlier AutoExtractor path verified live on RTX 2000 Ada. See DECISIONS.md D8/D13"/>
+      <task id="P4.7" name="JointIE typed relation decoding" status="done" notes="beam search, no_self_loops, unique_head on leads/subsidiary_of, symmetric partnered_with. Infeasible graphs drop relations rather than store an inconsistent graph. source_type/target_type persisted. D13"/>
       <task id="P4.5" name="LLM escalation path for ambiguous documents" status="done" notes="LlmExtractor (OpenAI-compatible chat completions; Pratt router pratt-medium when PRATT_LLM_API_KEY is set, else OpenRouter gpt-4o-mini) + EscalatingExtractor wrapper (opt-in via EXTRACTION_ESCALATE/--escalate). Triggers: no mentions, no relations, majority low-confidence, or sparse relation density. Verified live: pure 'llm' backend end-to-end (gpt-4o-mini) and spaCy+escalate; Pratt pratt-medium verified live. See DECISIONS.md D11/D12"/>
       <task id="P4.6" name="Persist mentions + proposed relations to Postgres" status="done" depends="P2.3" notes="pipeline.extract_documents already records mentions + relation_proposals; verified end-to-end with gliner2 (41 mentions, 27 proposals -> 27 facts persisted)"/>
     </phase>
@@ -53,7 +54,8 @@
       <task id="P5.1" name="Exact/alias/trigram resolution in SQL" status="done" notes="src/entity_graph/resolve.py"/>
       <task id="P5.2" name="Jev SystemOne client (Choice/Score/Noul over POST /v1/systemone)" status="done" notes="src/entity_graph/extract/jev.py; Pratt router (/v1/systemone, pratt-jev) and OpenRouter mirror supported"/>
       <task id="P5.3" name="Entity alignment via Jev Score routing (separate / curator / merge)" status="done" notes="resolve.ensure_entity routes fuzzy (trigram) candidates through align_pair; merge links + alias, curator creates + queues, separate creates. Verified live: 'Maria Chen' vs 'Dr. Maria Chen' score 1.84 -> merge. See DECISIONS.md D9"/>
-      <task id="P5.4" name="Relation validation via Jev Noul (does the evidence sentence assert this?)" status="done" notes="graph_store.build_from_proposals Noul-scores pending proposals in batched calls (&lt;=25/request); noul&lt;0.5 -&gt; status='rejected'. Sample: 14 candidates -> 9 promoted (all correct), 5 real falsehoods rejected. See DECISIONS.md D9"/>
+      <task id="P5.4" name="Relation validation via Jev Noul (does the evidence sentence assert this?)" status="done" notes="graph_store.build_from_proposals judges pending proposals. Jev asks assertion Noul plus a modality Choice; non-fact argmax or noul below the frozen 0.5 cutoff (D15) sets status=rejected. Sample before the modality question: 14 candidates, 9 promoted, 5 falsehoods rejected. See DECISIONS.md D9/D14"/>
+      <task id="P5.7" name="Local Decide gate when no Jev key is set" status="done" notes="extract/decide.py: separate modality and relation-agreement passes via gliner2.classification.Classifier. Argmax only; the 0.5 cutoff is not applied to Decide probabilities. Unscored claims still promote. D14"/>
       <task id="P5.5" name="Curator queue surface for score==1 (uncertain) pairs" status="done" notes="curator_queue table + `entity-graph curator` CLI lists pending pairs"/>
       <task id="P5.6" name="Verify Jev request/response fields against live API" status="done" notes="LIVE-verified 2026-10-11 via OpenRouter mirror (model typesafe/jev-1.13-20260917): noul/choice/score all match documented shape; ~$0.00002/call; batched Noul == single-call accuracy. Also verified via Pratt router (POST /v1/systemone, model pratt-jev): alignment score 1.84 -> merge, noul 0.99/0.02 for a claim and its reverse. See RESEARCH.md §4b, DECISIONS.md D12"/>
     </phase>
@@ -71,8 +73,8 @@
       <task id="P7.4" name="Temporal analysis (facts valid_from/valid_to)" status="todo"/>
     </phase>
 
-    <phase id="P8" name="Hardening" status="todo">
-      <task id="P8.1" name="Extraction quality eval set (golden facts) + precision/recall report" status="todo"/>
+    <phase id="P8" name="Hardening" status="in-progress">
+      <task id="P8.1" name="Extraction quality eval set (golden facts) + precision/recall report" status="done" notes="data/gold/greengrid_partnership.jsonl (facts, nonfacts, traps) + entity-graph eval. Scores alias-aware triples and prints a threshold sweep. Does not write RELATION_VALIDATION_THRESHOLD. D15"/>
       <task id="P8.2" name="Batch performance test on 100+ docs; tune GLiNER2 thresholds" status="todo"/>
       <task id="P8.3" name="Decision: adopt Apache AGE or stay on CTEs (only if traversal-heavy queries emerge)" status="todo"/>
     </phase>
@@ -91,6 +93,10 @@
     <decision id="D9" title="Jev integration: alignment routing, batched Noul validation, OpenRouter inference" ref="docs/DECISIONS.md#d9"/>
     <decision id="D10" title="Sentence boundaries at paragraph breaks, not single newlines" ref="docs/DECISIONS.md#d10"/>
     <decision id="D11" title="LLM escalation is an opt-in wrapper over the cheap extractor" ref="docs/DECISIONS.md#d11"/>
+    <decision id="D12" title="Pratt router is the default LLM and Jev provider" ref="docs/DECISIONS.md#d12"/>
+    <decision id="D13" title="Relation candidates come from JointIE, not independent relations()" ref="docs/DECISIONS.md#d13"/>
+    <decision id="D14" title="Modality gate: Jev Choice beside the Noul; Decide when there is no key" ref="docs/DECISIONS.md#d14"/>
+    <decision id="D15" title="Gold facts before any cutoff change; 0.5 stays frozen" ref="docs/DECISIONS.md#d15"/>
   </decisions>
 
   <risks>

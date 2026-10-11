@@ -28,6 +28,11 @@ class RelationProposal:
     relation: str
     evidence: str = ""
     confidence: float = 1.0
+    # Ontology labels (person, organization, ...) when the extractor knows them.
+    # Empty for backends that do not type endpoints. The local gate uses these
+    # for relation agreement and skips that check when they are missing.
+    source_type: str = ""
+    target_type: str = ""
 
 
 @dataclass

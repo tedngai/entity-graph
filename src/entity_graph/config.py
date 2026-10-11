@@ -28,6 +28,12 @@ class Config:
     gliner_device: str = "auto"
     gliner_threshold: float = 0.4
 
+    # Local gate when Jev is not configured (GLiNER2.5-Decide). Device falls
+    # back to GLINER_DEVICE. The model is loaded only at build time, and only
+    # when no System One key is set.
+    decide_model: str = "fastino/GLiNER2.5-Decide"
+    decide_device: str = "auto"
+
     # LLM escalation (PROGRESS P4.5; opt-in). OpenAI-compatible chat completions.
     # Endpoint/model/key are inferred in load_config(): a bare PRATT_LLM_API_KEY
     # selects the Pratt router (POST /v1/chat/completions, model pratt-medium);
@@ -110,6 +116,8 @@ def load_config() -> Config:
         gliner_model=env("GLINER_MODEL", "fastino/gliner2.5-base-v1"),
         gliner_device=env("GLINER_DEVICE", "auto"),
         gliner_threshold=float(env("GLINER_THRESHOLD", "0.4")),
+        decide_model=env("DECIDE_MODEL", "fastino/GLiNER2.5-Decide"),
+        decide_device=env("DECIDE_DEVICE", env("GLINER_DEVICE", "auto")),
         llm_url=env("LLM_URL", llm_url_default),
         llm_api_key=env("LLM_API_KEY", "") or llm_key_default,
         llm_model=env("LLM_MODEL", llm_model_default),

@@ -339,3 +339,97 @@ relations); `pratt-jev` returned `score 1.84` (merge) for a near-duplicate ORG
 pair and `noul 0.99` / `0.02` for a claim and its reversed form. Router usage is
 reported per call (e.g. `cost: 1.47e-05`).
 
+---
+
+## D13 — Relation candidates come from JointIE, not independent `.relations()`
+**Status:** accepted · **Date:** 2026-10-11
+
+**Context.** D8 decoded entities and relations in separate calls
+(`create_schema().entities().relations()`). That path cannot enforce typed
+endpoints, cardinality, or no-self-loops, so an organization can be emitted as
+the founder of a person. GLiNER2.5's `JointIE` scores candidates and searches a
+graph that already satisfies those constraints.
+
+**Decision.** `GlinerExtractor` loads `JointIE` on `fastino/gliner2.5-base-v1`
+(D8's checkpoint; `from_pretrained` accepts boundary models with relations
+enabled). The schema lives in `extract/ontology.py` and is shared with the
+local gate: closed entity labels, the existing relation set with typed
+endpoints, `unique_head` on `leads` and `subsidiary_of`, `symmetric` on
+`partnered_with`, and `no_self_loops()`. Decode with
+`JointIEConfig(optimizer="beam", beam_size=32)`. `GLINER_THRESHOLD` is passed
+as `entity_threshold` (an extra cut), not as the decoder's candidate floor.
+If `result.feasible` is false, mentions are kept and relations are dropped —
+an inconsistent graph is not stored. Independent `.relations()` remains only
+when the installed `gliner2` has no `joint_ie` module.
+
+**Why.** Typed endpoints are the constraint the independent decoder cannot
+express. One ontology module keeps the extractor and the Decide relation
+question from drifting apart. The pipeline already chunks and rebases offsets,
+so extraction stays per window rather than calling `extract_long` inside the
+extractor.
+
+**Consequences.** `RelationProposal` gains optional `source_type` /
+`target_type`. `relation_proposals` stores them (re-run `init-db`; migration
+`db/migrations/001_gate_columns.sql`). D8's install notes still apply.
+
+---
+
+## D14 — Modality gate: Jev Choice beside the Noul; Decide when there is no key
+**Status:** accepted · **Date:** 2026-10-11
+
+**Context.** The assertion Noul asks whether the evidence states the claim. It
+does not ask what kind of statement that is. A sentence that says a firm *will
+invest* can score as a relation and still not be a completed fact. An
+independent measurement (Lyon, 2026-09-24) found a local GLiNER2.5-Decide gate
+within a hundredth of F1 of a hosted Jev assertion gate, using an argmax over
+short modality labels plus a relation-agreement check. Tasks that share a
+prompt shift each other's answers, so the two questions are separate passes.
+
+**Decision.**
+1. When a Jev key is set, `judge_relations` asks the existing assertion Noul
+   and a `choice` question in the same request. Criteria are short:
+   `fact`, `possibility`, `denial`, `forecast`, `not_stated`. Promotion
+   requires modality argmax `fact` (no probability cutoff on that head) and
+   Noul at or above the frozen cutoff (D15).
+2. When no Jev key is set, `build` loads `fastino/GLiNER2.5-Decide` and asks
+   the same two questions as separate `Classifier` calls. Relation agreement
+   is asked only when both endpoint types are known; the options are the
+   ontology's legal relations plus `no relation`. Disagreement drops the edge.
+   Decide probabilities are not Nouls, so the 0.5 cutoff is not applied to them.
+3. A claim neither judge can score is promoted on extractor confidence, matching
+   the previous offline degrade. Jev wins when both could run; Decide is not
+   loaded in that case.
+
+**Why.** The two checks fail on different edges (right label, wrong modality
+versus wrong label). Short labels are Decide's idiom; Jev's Choice already
+uses a criteria map. Keeping both questions out of one Decide prompt follows
+the measured result that a shared prompt costs recall.
+
+**Consequences.** `relation_proposals.modality` and `.gate` record the judgment.
+`DECIDE_MODEL` / `DECIDE_DEVICE` (default `GLINER_DEVICE`). No new threshold.
+
+---
+
+## D15 — Gold facts before any cutoff change; 0.5 stays frozen
+**Status:** accepted · **Date:** 2026-10-11
+
+**Context.** D9 set `RELATION_VALIDATION_THRESHOLD = 0.5` from one sample
+(14 candidates, 9 promoted). That is not a precision/recall curve. Tuning it
+before a gold set exists would fit the sample that produced the constant.
+
+**Decision.** Do not change `0.5` in this change. Add
+`data/gold/greengrid_partnership.jsonl`: asserted facts, relations the text
+states in the wrong modality (`nonfact`), and the falsehoods the live run
+already caught (`trap`, including reversed `FOUNDED` and fabricated
+`ACQUIRED` / `SUBSIDIARY_OF`). `entity-graph eval` checks that every evidence
+quote is a substring of the source, scores predictions (alias-aware, direction-
+sensitive), and prints a threshold sweep. The sweep is informational. Writing
+a new cutoff requires a new decision record after that report.
+
+**Why.** P8.1 asked for a golden fact set before threshold tuning. The sample
+is small; it is enough to stop the cutoff from moving on anecdote, not enough
+to pick a new one.
+
+**Consequences.** `entity-graph eval` needs no database. `--predictions` scores
+a JSON/JSONL file; `--from-db` scores current facts when Postgres is up.
+

@@ -11,14 +11,44 @@ from datetime import date
 
 from .config import Config, load_config
 from .db import connect
+from .extract.decide import judge_relations as decide_judge_relations
+from .extract.gate import should_promote
 from .extract.jev import (
     RELATION_VALIDATION_THRESHOLD,
     SystemOneClient,
-    validate_relations,
+    judge_relations,
 )
 from .resolve import add_alias, entity_for_surface_in_doc, ensure_entity
 
 log = logging.getLogger(__name__)
+
+
+def _judge_rows(config: Config, client: SystemOneClient | None, rows: list) -> dict:
+    """Jev when a key is set; otherwise the local Decide gate. Empty if neither runs."""
+    if client is None or not rows:
+        return {}
+    claims = [
+        {
+            "id": pid,
+            "subject": src,
+            "relation": relation,
+            "object": dst,
+            "evidence": evidence or "",
+            "source_type": source_type or "",
+            "target_type": target_type or "",
+        }
+        for pid, _doc, src, dst, relation, evidence, _ex, _conf, source_type, target_type in rows
+    ]
+    if client.enabled:
+        verdicts = judge_relations(client, claims)
+        log.info("Jev judged %d/%d relation proposals", len(verdicts), len(rows))
+        return verdicts
+    verdicts = decide_judge_relations(
+        claims, model=config.decide_model, device=config.decide_device,
+    )
+    if verdicts:
+        log.info("Decide judged %d/%d relation proposals", len(verdicts), len(rows))
+    return verdicts
 
 
 # ---------------------------------------------------------------------------
@@ -41,17 +71,19 @@ def record_mention(cur, document_id: int, surface_form: str, char_start: int,
 
 
 def record_proposal(cur, document_id: int, source_surface: str, target_surface: str,
-                    relation: str, evidence: str, extractor: str, confidence: float) -> int:
+                    relation: str, evidence: str, extractor: str, confidence: float,
+                    source_type: str = "", target_type: str = "") -> int:
     """Stage a candidate relation; `build` promotes it to relationship + fact."""
     cur.execute(
         """
         INSERT INTO relation_proposals
             (document_id, source_surface, target_surface, relation, evidence_text,
-             extractor, confidence)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
+             extractor, confidence, source_type, target_type)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
         """,
-        (document_id, source_surface, target_surface, relation, evidence, extractor, confidence),
+        (document_id, source_surface, target_surface, relation, evidence, extractor,
+         confidence, source_type or None, target_type or None),
     )
     return cur.fetchone()[0]
 
@@ -96,10 +128,11 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
     """Promote pending relation_proposals into relationships + facts.
 
     Surfaces are resolved against mentions of the same document first, then
-    through ensure_entity (exact/alias/trigram). When a Jev client is enabled
-    and ``validate`` is set, every pending proposal is Noul-scored in one
-    batched call and refuted claims (noul < threshold) are marked ``rejected``
-    instead of being promoted. Returns the number of edges built.
+    through ensure_entity (exact/alias/trigram). When ``validate`` is set, Jev
+    (if a key is configured) or GLiNER2.5-Decide (local, no key) judges each
+    pending proposal. A refuted claim is marked ``rejected`` instead of being
+    promoted. The Jev assertion cutoff is the frozen constant; modality is an
+    argmax. Returns the number of edges built.
     """
     config = config or load_config()
     client = SystemOneClient(config) if validate else None
@@ -108,37 +141,31 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
         cur.execute(
             """
             SELECT id, document_id, source_surface, target_surface, relation,
-                   evidence_text, extractor, confidence
+                   evidence_text, extractor, confidence, source_type, target_type
             FROM relation_proposals WHERE status = 'pending' ORDER BY id
             """
         )
         rows = cur.fetchall()
+        verdicts = _judge_rows(config, client, rows)
 
-        verdicts: dict[int, float] = {}
-        if client is not None and client.enabled and rows:
-            claims = [
-                {"id": pid, "subject": src, "relation": relation,
-                 "object": dst, "evidence": evidence or ""}
-                for pid, _doc, src, dst, relation, evidence, _ex, _conf in rows
-            ]
-            verdicts = validate_relations(client, claims)
-            log.info("Jev validated %d/%d relation proposals", len(verdicts), len(rows))
-
-        for pid, doc_id, src, dst, relation, evidence, extractor, confidence in rows:
-            noul = verdicts.get(pid)
-            if (
-                client is not None
-                and client.enabled
-                and noul is not None
-                and noul < RELATION_VALIDATION_THRESHOLD
+        for (pid, doc_id, src, dst, relation, evidence, extractor, confidence,
+             _source_type, _target_type) in rows:
+            judgment = verdicts.get(pid)
+            assertion = judgment.assertion if judgment is not None else None
+            modality = judgment.modality if judgment is not None else None
+            gate = judgment.source if judgment is not None else None
+            if judgment is not None and not should_promote(
+                judgment, threshold=RELATION_VALIDATION_THRESHOLD
             ):
                 cur.execute(
-                    "UPDATE relation_proposals SET status = 'rejected', validation = %s "
-                    "WHERE id = %s",
-                    (noul, pid),
+                    "UPDATE relation_proposals SET status = 'rejected', validation = %s, "
+                    "modality = %s, gate = %s WHERE id = %s",
+                    (assertion, modality, gate, pid),
                 )
-                log.info("Jev rejected proposal %s (%s %s %s, noul=%.2f)",
-                         pid, src, relation, dst, noul)
+                log.info(
+                    "%s rejected proposal %s (%s %s %s, assertion=%s, modality=%s)",
+                    gate or "gate", pid, src, relation, dst, assertion, modality,
+                )
                 continue
 
             src_id = entity_for_surface_in_doc(cur, src, doc_id) or ensure_entity(cur, src)
@@ -152,9 +179,9 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
                             extractor, confidence)
                 built += 1
             cur.execute(
-                "UPDATE relation_proposals SET status = 'promoted', validation = %s "
-                "WHERE id = %s",
-                (noul, pid),
+                "UPDATE relation_proposals SET status = 'promoted', validation = %s, "
+                "modality = %s, gate = %s WHERE id = %s",
+                (assertion, modality, gate, pid),
             )
     log.info("Built %d relationships from proposals", built)
     return built

@@ -107,7 +107,7 @@ def extract_documents(config: Config | None = None, force: bool = False) -> int:
             for proposal in result.relations:
                 record_proposal(cur, doc_id, proposal.source_surface, proposal.target_surface,
                                 proposal.relation, proposal.evidence, extractor.name,
-                                proposal.confidence)
+                                proposal.confidence, proposal.source_type, proposal.target_type)
             processed += 1
     return processed
 

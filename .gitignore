@@ -14,9 +14,11 @@ dist/
 # Outputs
 out/
 
-# Data (keep samples/, ignore bulk drops)
+# Data (keep samples/ and the gold eval set, ignore bulk drops)
 data/*
 !data/samples/
+!data/gold/
+!data/gold/**
 
 # OS / editor
 .DS_Store

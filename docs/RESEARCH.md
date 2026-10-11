@@ -297,6 +297,32 @@ Sources: [docs.typesafe.ai/models](https://docs.typesafe.ai/models),
 
 ---
 
+## 4c. Addendum (2026-10-11): JointIE proposes, a modality gate disposes
+
+Independent `.relations()` cannot enforce typed endpoints. GLiNER2.5 `JointIE`
+([tutorial](https://github.com/fastino-ai/GLiNER2/blob/main/tutorial/15-joint_ie.md))
+decodes entities and relations together under head/tail types, uniqueness, and
+`no_self_loops()`. That is now the candidate generator ([D13](DECISIONS.md#d13)).
+
+The assertion Noul does not distinguish a completed fact from a forecast or a
+denial. William Lyon's
+[Decide study](https://lyonwj.com/blog/gliner-decide-knowledge-graph-extraction)
+(2026-09-24), on the same propose/dispose split as the Jev post, measured:
+
+| System | precision | recall | F1 |
+|---|---|---|---|
+| GLiNER2.5, ungated | 0.279 | 0.404 | 0.330 |
+| Jev assertion gate | 0.404 | 0.404 | 0.404 |
+| Decide modality + relation agreement | 0.388 | 0.404 | 0.396 |
+
+Decide is a verifier, not an extractor and not a pair comparator. Short labels
+and an argmax beat a threshold on P(fact); a shared prompt shifts the two
+heads, so they are separate passes. Jev still wins on instruction-following
+pair comparison. This repo therefore asks Jev for modality *beside* the Noul
+when a key exists, and uses Decide only as the offline gate
+([D14](DECISIONS.md#d14)). The 0.5 Noul cutoff is not retuned until
+`data/gold/` is scored ([D15](DECISIONS.md#d15)).
+
 ## 5. Document ingestion
 - **txt/md**: direct. **PDF**: `pypdf` for text-layer PDFs (implemented, optional).
 - For scanned/layout-heavy PDFs, the current best tools are IBM **docling** and

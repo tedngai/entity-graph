@@ -26,6 +26,10 @@ def apply_schema(config: Config | None = None) -> None:
         raise FileNotFoundError(
             f"Schema not found at {schema_file}. Run CLI commands from the repo root."
         )
+    migrations = sorted((schema_file.parent / "migrations").glob("*.sql"))
     with connect(config) as conn, conn.cursor() as cur:
         cur.execute(schema_file.read_text(encoding="utf-8"))
+        for path in migrations:
+            cur.execute(path.read_text(encoding="utf-8"))
+            log.info("Applied migration %s", path.name)
     log.info("Schema applied from %s", schema_file)

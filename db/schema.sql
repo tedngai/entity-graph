@@ -96,8 +96,11 @@ CREATE INDEX IF NOT EXISTS idx_rel_target ON relationships (target_id);
 -- ----------------------------------------------------------------------------
 -- relation_proposals: staged candidate edges from extraction. `build` promotes
 -- them into relationships + facts once mentions are resolved to entities.
--- `validation` holds the Jev Noul score (does the evidence assert the claim?);
--- `status` is pending -> promoted | rejected (rejected = Jev refuted it).
+-- `validation` holds the Jev assertion Noul (does the evidence assert the claim?).
+-- `modality` is the argmax statement kind (fact | possibility | denial | forecast
+-- | not_stated). `gate` is jev | decide. `source_type` / `target_type` are the
+-- ontology labels JointIE assigned, used by the local relation-agreement check.
+-- `status` is pending -> promoted | rejected (rejected = the gate refuted it).
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS relation_proposals (
     id             BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -109,6 +112,10 @@ CREATE TABLE IF NOT EXISTS relation_proposals (
     extractor      TEXT NOT NULL,
     confidence     REAL CHECK (confidence IS NULL OR confidence BETWEEN 0 AND 1),
     validation     REAL CHECK (validation IS NULL OR validation BETWEEN 0 AND 1),
+    source_type    TEXT,
+    target_type    TEXT,
+    modality       TEXT,
+    gate           TEXT,
     status         TEXT NOT NULL DEFAULT 'pending'
                    CHECK (status IN ('pending', 'promoted', 'rejected')),
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
