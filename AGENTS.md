@@ -4,8 +4,9 @@ Working rules for any AI agent (or human) doing work in this repository.
 Before starting a task, read `PROGRESS.xml` to see where things stand, and
 update it when you finish.
 
-**Commit as you go.** A finished slice is committed before the next slice
-starts. Do not save commits for the end of a task. See §6.
+**Commit and push as you go.** A finished slice is committed and pushed to
+`origin` before the next slice starts. Do not save commits or pushes for the
+end of a task. See §6.
 
 ## 1. Project mission
 
@@ -94,11 +95,13 @@ py -m pytest                              # tests (no DB or network needed)
    touches extraction or the gate). Do not commit a tree you know is broken.
 6. Commit message: what changed and why, one or two sentences. Never commit
    `.env`, tokens, or credentials (see §8).
-7. Push only when the user asks. Authenticate with `GITHUB_PAT` per-push; do
-   not store the token in `.git/config`.
+7. **Push that commit to `origin` before starting the next slice.** Do not wait
+   to be asked. Authenticate with `GITHUB_PAT` from `.env` on that push only;
+   do not store the token in `.git/config`, and do not print it. If the push
+   fails, stop and say so. Do not force-push unless the user asks.
 8. When the task is done: update task `status="done"`, add a one-line `notes`,
-   bump the root `updated` attribute, and commit that bookkeeping with the
-   slice it describes (or as its own commit if the code is already committed).
+   bump the root `updated` attribute, and commit and push that bookkeeping with
+   the slice it describes (or as its own commit if the code is already committed).
 9. If you made a significant technical choice, add a decision record to
    `docs/DECISIONS.md` and reference its ID in the task notes. Commit the
    record with the code it justifies.
@@ -132,5 +135,6 @@ are loaded into the environment by `entity_graph.config.load_config()`
 | `OPENROUTER_API_KEY` | Fallback provider for the LLM and Jev (OpenRouter mirror) |
 
 The Git remote is `origin` → `https://github.com/tedngai/entity-graph.git`.
-Authenticate pushes with `GITHUB_PAT`; do **not** commit the token or embed it in
-`.git/config` (pass it per-push instead).
+Every finished slice is pushed there (§6). Authenticate with `GITHUB_PAT` from
+`.env` on that push; do **not** commit the token, print it, or embed it in
+`.git/config`.
