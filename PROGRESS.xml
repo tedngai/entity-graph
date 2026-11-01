@@ -62,6 +62,7 @@
       <task id="P5.6" name="Verify Jev request/response fields against live API" status="done" notes="LIVE-verified 2026-10-11 via OpenRouter mirror (model typesafe/jev-1.13-20260917): noul/choice/score all match documented shape; ~$0.00002/call; batched Noul == single-call accuracy. Also verified via Pratt router (POST /v1/systemone, model pratt-jev): alignment score 1.84 -> merge, noul 0.99/0.02 for a claim and its reverse. See RESEARCH.md §4b, DECISIONS.md D12"/>
       <task id="P5.8" name="Provider prompt profiles; calibrate the local Clef-Flash gate" status="done" notes="extract/profiles.py: RelationPromptProfile (task, assertion, modality criteria, examples, batch size, modality map); default (Jev wording) + clef (doer/receiver assertion, tense cues, 1 claim/request). judge_relations(profile=...); SYSTEMONE_PROFILE env. scripts/calibrate_clef.py sweeps variants; compare_providers.py gained --a-profile/--b-profile. Calibrated Clef matches Jev on the gold gate (0.941, 0 leaks vs 0.706/5) at ~2.5x wall time; misses a different fact. tests/test_profiles.py. See RESEARCH.md §4d-i, DECISIONS.md D17"/>
       <task id="P5.10" name="Fail closed when Jev returns no verdict" status="done" notes="gate.awaits_verdict: with Jev enabled, an unanswered proposal stays pending for the next build instead of promoting unscored (S-1: 3 of 5 surviving unjudged edges were wrong). No-key and --no-validate paths unchanged. DECISIONS.md D22"/>
+      <task id="P5.11" name="Defined terms resolve to their long form (document-scoped)" status="done" notes="defined_terms.py: quoted parentheticals + bare acronyms anchored to the preceding mention, accepted only when the short form can name it (initials / word subset / party name). resolve_unresolved resolves short-form mentions as the long form; no global alias. S-1: 59 definitions, all correct (LTBT, AWS, CNAS, Company -> Anthropic, PBC). tests/test_defined_terms.py. DECISIONS.md D24"/>
       <task id="P5.9" name="Default Pratt-router Jev model is pratt-d3" status="done" notes="config.py infers model pratt-d3 when Jev runs on the Pratt router (PRATT_LLM_API_KEY only); explicit SYSTEMONE_* overrides unchanged, default profile stays the Jev-verified wording. compare_providers.py --a-model default follows. Smoke-tested live 2026-11-01 (noul 0.986, choice 0.997). Frozen 0.5 cutoff carries over; gold-set eval still pending for pratt-d3. DECISIONS.md D20"/>
     </phase>
 
@@ -113,6 +114,7 @@
     <decision id="D21" title="Symmetric relations are decoded directed and canonicalized afterwards" ref="docs/DECISIONS.md#d21"/>
     <decision id="D22" title="A proposal Jev did not answer stays pending" ref="docs/DECISIONS.md#d22"/>
     <decision id="D23" title="The graph views never expose a self-loop" ref="docs/DECISIONS.md#d23"/>
+    <decision id="D24" title="Defined terms resolve to their long form, scoped to their document" ref="docs/DECISIONS.md#d24"/>
   </decisions>
 
   <risks>

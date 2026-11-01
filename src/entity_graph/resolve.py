@@ -23,6 +23,7 @@ import re
 from .chunking import split_sentences
 from .config import Config, load_config
 from .db import connect
+from .defined_terms import DefinedTerm, defined_term_map
 from .extract.jev import SystemOneClient, align_pair
 
 log = logging.getLogger(__name__)
@@ -236,8 +237,27 @@ def ensure_entity(cur, surface: str, entity_type: str | None = None,
     return _create_entity(cur, surface, entity_type)
 
 
+def _document_terms(cur, document_id: int) -> dict[str, DefinedTerm]:
+    """Defined terms of one document, anchored to its extracted mentions (D24)."""
+    cur.execute("SELECT raw_text FROM documents WHERE id = %s", (document_id,))
+    row = cur.fetchone()
+    if not row or not row[0]:
+        return {}
+    cur.execute(
+        "SELECT char_start, char_end, surface_form, entity_type FROM mentions "
+        "WHERE document_id = %s",
+        (document_id,),
+    )
+    return defined_term_map(row[0], cur.fetchall())
+
+
 def resolve_unresolved(config: Config | None = None) -> int:
-    """Link every unresolved mention to a canonical entity. Returns count."""
+    """Link every unresolved mention to a canonical entity. Returns count.
+
+    A mention of a short form its document defines (``Long-Term Benefit Trust
+    ("LTBT")``) resolves as the long form, so both surfaces share one entity.
+    The definition stays scoped to its document; no alias is written (D24).
+    """
     config = config or load_config()
     client = SystemOneClient(config)
     if client.enabled:
@@ -253,9 +273,21 @@ def resolve_unresolved(config: Config | None = None) -> int:
         )
         rows = cur.fetchall()
         total = len(rows)
+        terms_by_doc: dict[int, dict[str, DefinedTerm]] = {}
+        term_links = 0
         for index, (mention_id, surface, entity_type, document_id, char_start) in enumerate(
             rows, start=1
         ):
+            if document_id not in terms_by_doc:
+                terms_by_doc[document_id] = _document_terms(cur, document_id)
+                if terms_by_doc[document_id]:
+                    log.info("Document %s defines %d term(s)", document_id,
+                             len(terms_by_doc[document_id]))
+            term = terms_by_doc[document_id].get(normalize_surface(surface))
+            if term is not None:
+                surface = term.long
+                entity_type = term.long_type or entity_type
+                term_links += 1
             entity_id = ensure_entity(
                 cur, surface, entity_type,
                 client=client, document_id=document_id, char_start=char_start,
@@ -268,6 +300,8 @@ def resolve_unresolved(config: Config | None = None) -> int:
                 conn.commit()
                 log.info("Resolved %d/%d mentions", index, total)
         conn.commit()
+    if term_links:
+        log.info("Linked %d mention(s) through defined terms", term_links)
     log.info("Resolved %d mentions", linked)
     return linked
 

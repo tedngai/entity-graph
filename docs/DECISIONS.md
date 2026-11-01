@@ -699,3 +699,37 @@ its facts are untouched. `tests/test_views.py` checks the final view text.
 **Consequences.** Applied to `entity_graph_anthropic_s1`: 219 → 218 edges,
 nodes unchanged. Unmerging still does not restore the pre-merge endpoint of a
 collapsed edge (unchanged D19 limitation).
+
+## D24 — Defined terms resolve to their long form, scoped to their document
+**Status:** accepted · **Date:** 2026-11-01
+
+**Context.** Documents declare short names inline — `Long-Term Benefit Trust
+("LTBT")`, `Anthropic, PBC (the "Company")`, `Clinton Health Access
+Initiative (CHAI)`. Trigram and Jev alignment cannot see that an acronym and
+its expansion are one entity, so the S-1 kept `LTBT` and `Long-Term Benefit
+Trust` as separate nodes, and CNAS / USG needed manual curation.
+
+**Decision.** `defined_terms.py` finds quoted parentheticals (with optional
+`the` / `each, a` / `together with its affiliates,` prefixes) and bare
+parenthesized acronyms, and anchors each to the extracted mention ending just
+before it. It accepts a definition only when the short form can name that
+mention: an acronym must spell its initials (minor words and corporate
+suffixes skippable, hyphenated words split), a word term must consist of the
+long form's own words, or be a conventional party name (`Company`, `Trust`,
+`Registrant`, ...) for an organization. Pronouns never count. During
+`resolve`, a mention whose surface is a defined short form of its document
+resolves as the long form. Nothing is written to `entity_aliases`: a
+definition binds only inside its own document.
+
+**Why.** On the S-1 the unguarded pattern found 98 definitions, about a third
+wrong — the quoted term often names something new right after an unrelated
+noun (`Bartz, et al. v. Anthropic PBC ("Bartz")`, `... in the United States
+("GAAP")`). With the guard, 59 definitions, all correct on review (LTBT, AWS,
+GCP, CNAS, CHAI, USG, Company → Anthropic, PBC, Board → board of directors).
+The Shanghai book yields one (B.A.T.); its quoted parentheticals are
+translations of titles, which have no preceding mention match.
+
+**Consequences.** Applies to new `resolve` runs; existing databases are
+unchanged until re-resolved. A true alias that is neither an acronym nor a
+word subset (`Google` ← `Alphabet Inc.`, `Bun` ← `Codeblog Corp.`) is missed
+on purpose.
