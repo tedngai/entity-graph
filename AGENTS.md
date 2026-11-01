@@ -133,7 +133,7 @@ py -m pytest                              # tests (no DB or network needed)
 - Jev API key / account: **resolved 2026-10-11 (P5.6)**. The client contract is
   live-verified through the OpenRouter mirror (`model` → `typesafe/jev-1.13-20260917`)
   for all three answer kinds; see `docs/RESEARCH.md` §4b. Provide one of
-  `PRATT_LLM_API_KEY` (Pratt router, `/v1/systemone`, model `pratt-jev`),
+  `PRATT_LLM_API_KEY` (Pratt router, `/v1/systemone`, model `pratt-d3`),
   `SYSTEMONE_API_KEY` (native TypeSafe), or `OPENROUTER_API_KEY` (OpenRouter
   mirror) in `.env` — the endpoint and model are inferred (D12); without a key
   the pipeline runs offline on exact/alias/trigram resolution and
@@ -151,7 +151,7 @@ are loaded into the environment by `entity_graph.config.load_config()`
 | Variable in `.env` | Used for |
 | --- | --- |
 | `GITHUB_PAT` | GitHub personal access token for pushing this repo |
-| `PRATT_LLM_API_KEY` | Pratt model router: LLM escalation (`pratt-medium`) + Jev (`pratt-jev`) |
+| `PRATT_LLM_API_KEY` | Pratt model router: LLM escalation (`pratt-medium`) + Jev (`pratt-d3`) |
 | `OPENROUTER_API_KEY` | Fallback provider for the LLM and Jev (OpenRouter mirror) |
 
 The Git remote is `origin` → `https://github.com/tedngai/entity-graph.git`.

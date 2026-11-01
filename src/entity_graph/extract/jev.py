@@ -25,13 +25,14 @@ Contract (verified against the published API reference, 2026-10-10):
   Endpoint: POST https://api.typesafe.ai/v1/systemone (configurable). OpenRouter
   exposes the same body at POST https://openrouter.ai/api/alpha/decisions with
   model ``typesafe/jev-1.13``. The Pratt router exposes it at
-  POST https://llm.pratt.edu/v1/systemone with model ``pratt-jev``.
+  POST https://llm.pratt.edu/v1/systemone with model ``pratt-d3`` (D20).
 
 When none of SYSTEMONE_API_KEY / PRATT_LLM_API_KEY / OPENROUTER_API_KEY is set,
 every method returns None (the pipeline continues on exact/alias/trigram
 resolution), so the project runs fully offline. Live-verified 2026-10-11 (P5.6)
 via the OpenRouter mirror — see docs/RESEARCH.md §4b — and via the Pratt router
-(`/v1/systemone`, model ``pratt-jev``).
+(`/v1/systemone`, model ``pratt-jev``). ``pratt-d3`` smoke-verified 2026-11-01
+(D20): noul 0.986, choice 0.997 on the registration-statement probe.
 """
 
 from __future__ import annotations

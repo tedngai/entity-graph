@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<progress project="entity-graph" updated="2026-10-11" phase="scaffold-complete">
+<progress project="entity-graph" updated="2026-11-01" phase="scaffold-complete">
 
   <meta>
     <goal>Extract entities and relationships from unstructured documents, store key facts with provenance in PostgreSQL, analyze and visualize the network with NetworkX.</goal>
@@ -60,6 +60,7 @@
       <task id="P5.5" name="Curator queue surface for score==1 (uncertain) pairs" status="done" notes="curator_queue table + `entity-graph curator` CLI lists pending pairs"/>
       <task id="P5.6" name="Verify Jev request/response fields against live API" status="done" notes="LIVE-verified 2026-10-11 via OpenRouter mirror (model typesafe/jev-1.13-20260917): noul/choice/score all match documented shape; ~$0.00002/call; batched Noul == single-call accuracy. Also verified via Pratt router (POST /v1/systemone, model pratt-jev): alignment score 1.84 -> merge, noul 0.99/0.02 for a claim and its reverse. See RESEARCH.md §4b, DECISIONS.md D12"/>
       <task id="P5.8" name="Provider prompt profiles; calibrate the local Clef-Flash gate" status="done" notes="extract/profiles.py: RelationPromptProfile (task, assertion, modality criteria, examples, batch size, modality map); default (Jev wording) + clef (doer/receiver assertion, tense cues, 1 claim/request). judge_relations(profile=...); SYSTEMONE_PROFILE env. scripts/calibrate_clef.py sweeps variants; compare_providers.py gained --a-profile/--b-profile. Calibrated Clef matches Jev on the gold gate (0.941, 0 leaks vs 0.706/5) at ~2.5x wall time; misses a different fact. tests/test_profiles.py. See RESEARCH.md §4d-i, DECISIONS.md D17"/>
+      <task id="P5.9" name="Default Pratt-router Jev model is pratt-d3" status="done" notes="config.py infers model pratt-d3 when Jev runs on the Pratt router (PRATT_LLM_API_KEY only); explicit SYSTEMONE_* overrides unchanged, default profile stays the Jev-verified wording. compare_providers.py --a-model default follows. Smoke-tested live 2026-11-01 (noul 0.986, choice 0.997). Frozen 0.5 cutoff carries over; gold-set eval still pending for pratt-d3. DECISIONS.md D20"/>
     </phase>
 
     <phase id="P6" name="Graph store &amp; NetworkX" status="in-progress">
@@ -105,6 +106,7 @@
     <decision id="D17" title="Relation prompts are a selectable profile; the local Clef model is calibrated opt-in" ref="docs/DECISIONS.md#d17"/>
     <decision id="D18" title="Non-node types are dropped, the graph view is connected-only, surfaces are normalized" ref="docs/DECISIONS.md#d18"/>
     <decision id="D19" title="Curation is two reversible primitives: merge (repoints edges) and hide" ref="docs/DECISIONS.md#d19"/>
+    <decision id="D20" title="The Pratt router's default Jev model is pratt-d3" ref="docs/DECISIONS.md#d20"/>
   </decisions>
 
   <risks>

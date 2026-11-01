@@ -63,7 +63,7 @@ class Config:
     # Jev / System One (TypeSafe) typed decisions.
     # Endpoint/model/key are inferred in load_config() in this order:
     #   SYSTEMONE_API_KEY  -> native TypeSafe (POST /v1/systemone, jev-latest)
-    #   PRATT_LLM_API_KEY  -> Pratt router   (POST /v1/systemone, pratt-jev)
+    #   PRATT_LLM_API_KEY  -> Pratt router   (POST /v1/systemone, pratt-d3)
     #   OPENROUTER_API_KEY -> OpenRouter mirror (/api/alpha/decisions,
     #                         model typesafe/jev-1.13)
     systemone_url: str = "https://api.typesafe.ai/v1/systemone"
@@ -114,7 +114,7 @@ def load_config() -> Config:
         jev_key_default = systemone_key
     elif pratt_key:
         jev_url_default = "https://llm.pratt.edu/v1/systemone"
-        jev_model_default = "pratt-jev"
+        jev_model_default = "pratt-d3"
         jev_key_default = pratt_key
     else:
         jev_url_default = "https://openrouter.ai/api/alpha/decisions"

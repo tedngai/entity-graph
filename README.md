@@ -87,7 +87,7 @@ entity-graph run --input data/samples --escalate
 only when a key is configured — add one to `.env`:
 
 ```dotenv
-PRATT_LLM_API_KEY=...    # Pratt router (endpoint + model inferred: pratt-jev)
+PRATT_LLM_API_KEY=...    # Pratt router (endpoint + model inferred: pratt-d3)
 # or OPENROUTER_API_KEY=...  (typesafe/jev-1.13)
 # or SYSTEMONE_API_KEY=...   (native TypeSafe; SYSTEMONE_URL/MODEL override)
 ```

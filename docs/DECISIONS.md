@@ -598,4 +598,37 @@ hidden, and isolated entities. Book-specific curation lives in
 `network_analysis/shanghai/` (not in this repo). Self-loops created by a merge
 are kept when they carry facts and dropped when they are childless.
 
+---
+
+## D20 — The Pratt router's default Jev model is `pratt-d3`
+**Status:** accepted · **Date:** 2026-11-01
+
+**Context.** D12 wired the Pratt branch of `load_config()` to `pratt-jev`. The
+router now also serves `pratt-d3` on the same `POST /v1/systemone` decisions
+surface, and the owner directed standardizing on it; the current experiment
+(`network_analysis/anthropic-s1/`, the Anthropic PBC S-1) runs its gate on
+`pratt-d3`.
+
+**Decision.** When Jev credentials are inferred from `PRATT_LLM_API_KEY` (no
+explicit `SYSTEMONE_URL` / `SYSTEMONE_MODEL` / `SYSTEMONE_API_KEY`), the model
+is `pratt-d3` — one constant in `load_config()`, mirrored in
+`compare_providers.py`'s `--a-model` default. Explicit `SYSTEMONE_*`
+overrides still win, so a workspace can pin `pratt-jev`, native TypeSafe, or
+the local Clef-Flash server (plus the `clef` profile, D17) exactly as before.
+The default prompt profile stays the Jev-verified wording: `pratt-d3` is a
+hosted router model, not the small local model the `clef` profile was
+calibrated for.
+
+**Why.** One obvious default keeps `.env` minimal (key only) while every
+workspace keeps full control through environment overrides — the same
+mechanism the per-document experiment folders already use for database
+isolation.
+
+**Consequences.** The frozen `RELATION_VALIDATION_THRESHOLD` (D15) carries
+over unchanged; `pratt-d3` has not been through a gold-set sweep yet, so
+re-run `entity-graph eval` before trusting it for threshold work.
+Smoke-tested live 2026-11-01 (`/v1/systemone`, `pratt-d3`): noul 0.986,
+choice 0.997 on a registration-statement probe.
+
+
 

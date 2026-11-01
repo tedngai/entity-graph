@@ -7,7 +7,7 @@ difference is the model, not our parsing.
 Example (Pratt Jev vs a local Clef-Flash server):
 
     python scripts/compare_providers.py \
-        --a-name jev  --a-url https://llm.pratt.edu/v1/systemone --a-model pratt-jev \
+        --a-name jev  --a-url https://llm.pratt.edu/v1/systemone --a-model pratt-d3 \
         --b-name clef --b-url http://192.168.1.242:8001/v1/systemone \
         --b-model Cloudflare/clef-flash
 """
@@ -125,7 +125,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gold", default="data/gold/greengrid_partnership.jsonl")
     parser.add_argument("--a-name", default="jev")
     parser.add_argument("--a-url", default="https://llm.pratt.edu/v1/systemone")
-    parser.add_argument("--a-model", default="pratt-jev")
+    parser.add_argument("--a-model", default="pratt-d3")
     parser.add_argument("--a-key", default="", help="defaults to the configured Jev key")
     parser.add_argument("--a-profile", default="", help="relation-prompt profile (see profiles.py)")
     parser.add_argument("--b-name", default="clef")
