@@ -1,7 +1,7 @@
 """Promotion rule, Jev modality question, and the injectable Decide gate."""
 
 from entity_graph.extract.decide import judge_relations as decide_judge
-from entity_graph.extract.gate import RelationJudgment, should_promote
+from entity_graph.extract.gate import RelationJudgment, awaits_verdict, should_promote
 from entity_graph.extract.jev import (
     RELATION_VALIDATION_THRESHOLD,
     SystemOneClient,
@@ -20,6 +20,12 @@ def test_cutoff_stays_frozen() -> None:
 def test_unscored_proposals_promote() -> None:
     assert should_promote(None, threshold=THRESHOLD)
     assert should_promote(RelationJudgment(), threshold=THRESHOLD)
+
+
+def test_failed_remote_calls_wait_instead_of_promoting() -> None:
+    assert awaits_verdict(None, remote_gate=True)
+    assert not awaits_verdict(None, remote_gate=False)
+    assert not awaits_verdict(RelationJudgment(source="jev"), remote_gate=True)
 
 
 def test_jev_rejects_low_noul_and_non_facts() -> None:

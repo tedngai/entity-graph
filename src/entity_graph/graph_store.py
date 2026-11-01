@@ -12,7 +12,7 @@ from datetime import date
 from .config import Config, load_config
 from .db import connect
 from .extract.decide import judge_relations as decide_judge_relations
-from .extract.gate import should_promote
+from .extract.gate import awaits_verdict, should_promote
 from .extract.base import is_excluded_type
 from .extract.jev import (
     RELATION_VALIDATION_THRESHOLD,
@@ -137,11 +137,15 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
     (if a key is configured) or GLiNER2.5-Decide (local, no key) judges each
     pending proposal. A refuted claim is marked ``rejected`` instead of being
     promoted. The Jev assertion cutoff is the frozen constant; modality is an
-    argmax. Returns the number of edges built.
+    argmax. A proposal Jev did not answer (a failed call) stays pending for the
+    next build instead of promoting unscored (D22). Returns the number of edges
+    built.
     """
     config = config or load_config()
     client = SystemOneClient(config) if validate else None
+    remote_gate = client is not None and client.enabled
     built = 0
+    awaiting = 0
     with connect(config) as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -166,6 +170,9 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
                 )
                 continue
             judgment = verdicts.get(pid)
+            if awaits_verdict(judgment, remote_gate=remote_gate):
+                awaiting += 1
+                continue
             assertion = judgment.assertion if judgment is not None else None
             modality = judgment.modality if judgment is not None else None
             gate = judgment.source if judgment is not None else None
@@ -208,6 +215,11 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
                 "modality = %s, gate = %s WHERE id = %s",
                 (assertion, modality, gate, pid),
             )
+    if awaiting:
+        log.warning(
+            "%d proposal(s) got no gate verdict and stay pending; run build again "
+            "to retry them", awaiting,
+        )
     log.info("Built %d relationships from proposals", built)
     return built
 

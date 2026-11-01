@@ -49,6 +49,18 @@ class RelationJudgment:
     source: str = "none"  # jev | decide | none
 
 
+def awaits_verdict(judgment: RelationJudgment | None, *, remote_gate: bool) -> bool:
+    """True when a proposal must stay pending instead of promoting unscored.
+
+    With a remote gate (Jev) configured, a missing verdict means the call
+    failed (timeout, dropped connection), not that no gate exists. Such a
+    proposal stays ``pending`` so the next ``build`` retries it. On the S-1,
+    17 timed-out proposals promoted unscored and 3 of the 5 that survived
+    curation were wrong (``Anthropic ACQUIRED Google``). See DECISIONS.md D22.
+    """
+    return remote_gate and judgment is None
+
+
 def should_promote(judgment: RelationJudgment | None, *, threshold: float) -> bool:
     """Return True when the proposal should become a fact.
 

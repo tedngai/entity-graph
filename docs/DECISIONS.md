@@ -661,3 +661,23 @@ relations are unchanged or slightly up. The new candidates include noise
 
 **Consequences.** Existing databases keep their old proposals; re-extract to
 gain partnerships. More ORG–ORG candidates means more gate calls at build.
+
+## D22 — A proposal Jev did not answer stays pending
+**Status:** accepted · **Date:** 2026-11-01
+
+**Context.** `should_promote(None)` promotes an unscored proposal — the
+offline degrade path when no gate exists (D14). But with Jev configured, a
+missing verdict means the call failed. On the S-1, 17 proposals timed out and
+were promoted on extractor confidence; 5 survived curation and 3 of those
+were wrong (`Anthropic ACQUIRED Google` and `ACQUIRED Broadcom`, both from an
+exhibit-index table row, and a signature-block self-loop), against 14 wrong
+out of 214 judged edges.
+
+**Decision.** `awaits_verdict(judgment, remote_gate=...)`: when the Jev client
+is enabled and a proposal has no verdict, `build` leaves it `pending`, logs
+the count, and the next `build` retries it. With no key (Decide or nothing)
+and with `--no-validate`, behaviour is unchanged.
+
+**Consequences.** A persistently failing endpoint leaves proposals pending
+rather than silently promoting them; `build --no-validate` remains the
+explicit way to promote without a gate.
