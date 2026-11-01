@@ -70,6 +70,7 @@
       <task id="P6.2" name="Write path: upsert entities/relationships/facts from extraction results" status="done" notes="Stub-level; exercised after P4.6"/>
       <task id="P6.3" name="Incremental sync + recalc of aggregate edge stats" status="todo"/>
       <task id="P6.4" name="Graph hygiene: drop non-node types, connected-only view, surface normalization" status="done" notes="EXCLUDE_ENTITY_TYPES (default DATE) filters mentions + typed proposals at extraction and blocks promotion in build; v_graph_nodes now requires an incident relationship (migration 002, entity rows kept); resolve.normalize_surface/match_surface collapse whitespace/edge punctuation and date ranges. Book run 4,191 entities -> 602 connected nodes, edges 990. tests/test_type_filter.py, tests/test_normalize.py. DECISIONS.md D18"/>
+      <task id="P6.6" name="Views never expose self-loops left by curation merges" status="done" notes="migration 004 + schema.sql: v_graph_edges filters source_id &lt;&gt; target_id; v_graph_nodes ignores loops when testing connectivity. Rows/facts kept. S-1 DB: 219 -> 218 edges. tests/test_views.py. DECISIONS.md D23"/>
       <task id="P6.5" name="Curation: merge duplicates and hide non-actors (reversible)" status="done" notes="curate.py merge_entities repoints the loser's relationships/aliases/mentions then sets merged_into (no edge lost); entities.is_hidden removes an entity + its edges from the views (row/facts kept); entity-graph curate --file curation.json [--dry-run]; migration 003; tests/test_curate.py. DECISIONS.md D19"/>
     </phase>
 
@@ -111,6 +112,7 @@
     <decision id="D20" title="The Pratt router's default Jev model is pratt-d3" ref="docs/DECISIONS.md#d20"/>
     <decision id="D21" title="Symmetric relations are decoded directed and canonicalized afterwards" ref="docs/DECISIONS.md#d21"/>
     <decision id="D22" title="A proposal Jev did not answer stays pending" ref="docs/DECISIONS.md#d22"/>
+    <decision id="D23" title="The graph views never expose a self-loop" ref="docs/DECISIONS.md#d23"/>
   </decisions>
 
   <risks>

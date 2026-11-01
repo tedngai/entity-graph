@@ -681,3 +681,21 @@ and with `--no-validate`, behaviour is unchanged.
 **Consequences.** A persistently failing endpoint leaves proposals pending
 rather than silently promoting them; `build --no-validate` remains the
 explicit way to promote without a gate.
+
+## D23 — The graph views never expose a self-loop
+**Status:** accepted · **Date:** 2026-11-01
+
+**Context.** `build` skips self-relations and JointIE forbids them, but a
+curation merge can join an edge's two endpoints. `_merge` keeps such a row
+when it has facts (invariant #2), so it reached the graph: on the S-1,
+`ANTHROPIC SUBSIDIARY_OF PBC` (a signature block) became
+`Anthropic SUBSIDIARY_OF Anthropic` once `PBC` was merged into `Anthropic`.
+
+**Decision.** Migration 004 (mirrored in `db/schema.sql`): `v_graph_edges`
+filters `source_id <> target_id`, and `v_graph_nodes` counts only non-loop
+edges when deciding whether an entity is connected. The relationship row and
+its facts are untouched. `tests/test_views.py` checks the final view text.
+
+**Consequences.** Applied to `entity_graph_anthropic_s1`: 219 → 218 edges,
+nodes unchanged. Unmerging still does not restore the pre-merge endpoint of a
+collapsed edge (unchanged D19 limitation).

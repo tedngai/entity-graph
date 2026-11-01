@@ -125,7 +125,9 @@ def _merge(cur, winner_id: int, loser_id: int) -> dict:
     for rid, src, tgt, rel in cur.fetchall():
         new_src = winner_id if src == loser_id else src
         new_tgt = winner_id if tgt == loser_id else tgt
-        if new_src == new_tgt:  # merge turned the edge into a self-loop
+        if new_src == new_tgt:
+            # The merge turned the edge into a self-loop. Facts keep the row
+            # (invariant #2); the graph views never expose a self-loop (D23).
             cur.execute("SELECT count(*) FROM facts WHERE relationship_id = %s", (rid,))
             if cur.fetchone()[0]:
                 cur.execute(

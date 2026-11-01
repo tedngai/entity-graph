@@ -173,7 +173,9 @@ CREATE INDEX IF NOT EXISTS idx_facts_current      ON facts (is_current) WHERE is
 -- Graph views: the stable contract consumed by NetworkX.
 -- Merged entities (merged_into IS NOT NULL) and curated non-actors
 -- (is_hidden) are excluded, and so are isolated entities (no incident
--- relationship): an edgeless node carries no network signal. The `entities`
+-- relationship): an edgeless node carries no network signal. Self-loops
+-- (left behind when a curation merge joins an edge's two endpoints) are kept
+-- with their facts but never exposed (D23). The `entities`
 -- rows are never deleted (invariant #2); they are only hidden from the view.
 -- See DECISIONS.md D18 (connected-only) and D19 (curation).
 -- ----------------------------------------------------------------------------
@@ -187,7 +189,8 @@ FROM entities e
 WHERE e.merged_into IS NULL
   AND NOT e.is_hidden
   AND EXISTS (SELECT 1 FROM relationships r
-              WHERE r.source_id = e.id OR r.target_id = e.id);
+              WHERE (r.source_id = e.id OR r.target_id = e.id)
+                AND r.source_id <> r.target_id);
 
 CREATE OR REPLACE VIEW v_graph_edges AS
 SELECT r.id              AS relationship_id,
@@ -204,4 +207,5 @@ SELECT r.id              AS relationship_id,
          WHERE f.relationship_id = r.id AND f.is_current) AS fact_count
 FROM relationships r
 JOIN entities se ON se.id = r.source_id AND se.merged_into IS NULL AND NOT se.is_hidden
-JOIN entities te ON te.id = r.target_id AND te.merged_into IS NULL AND NOT te.is_hidden;
+JOIN entities te ON te.id = r.target_id AND te.merged_into IS NULL AND NOT te.is_hidden
+WHERE r.source_id <> r.target_id;
