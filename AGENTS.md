@@ -52,6 +52,11 @@ streaming ingestion, multi-tenant isolation.
   `v_graph_nodes` is **connected-only** — an entity with no incident
   relationship is hidden (D18). Entity rows are never deleted; only the view
   filters them.
+- **Document profiles** (`doc_profiles.py`, D26): what differs between kinds
+  of documents — ontology, boilerplate windows to skip, gate/curation
+  defaults, gold file — is a profile selected by `DOC_PROFILE` (`general`,
+  `sec_filing`, `history_book`), never a separate pipeline. Add a profile
+  before forking code for a new document type.
 - **Curation**: `entity-graph curate --file` (D19) merges duplicates — repointing
   the loser's edges onto the winner so none is lost — and hides non-actors via
   `entities.is_hidden` (row and facts kept, excluded from the views). Both are
@@ -69,6 +74,9 @@ entity-graph extract                      # run extraction backend
 entity-graph resolve                      # entity resolution (+ Jev if API key set)
 entity-graph curator                      # list uncertain pairs queued by Jev alignment
 entity-graph curate --file curation.json  # merge duplicates / hide non-actors (reversible)
+entity-graph curate --defaults            # hide the document profile's generic non-actors
+entity-graph profiles                     # list document profiles (DOC_PROFILE selects one)
+entity-graph dates                        # date undated facts from their evidence (D25)
 entity-graph run --input data/samples     # full pipeline
 entity-graph analyze                      # NetworkX report to stdout
 entity-graph visualize                    # out/graph.html (pyvis)

@@ -100,6 +100,20 @@ lists uncertain pairs awaiting review. Without a key, resolution stays
 exact/alias/trigram and relation proposals are judged by local
 GLiNER2.5-Decide when `gliner2` is installed.
 
+**Document profiles.** One pipeline serves every kind of document; what
+differs — the ontology, boilerplate windows to skip, gate and curation
+defaults, and the gold file — is a profile:
+
+```powershell
+entity-graph profiles                  # general | sec_filing | history_book
+$env:DOC_PROFILE = "sec_filing"        # SEC filings: sued, supplies, underwriter_of, ...
+entity-graph curate --defaults         # hide the profile's generic non-actors
+entity-graph eval --from-db            # score against the profile's gold file
+```
+
+See `docs/DECISIONS.md` D26. Facts carry `valid_from` / `valid_to` read from
+their evidence (D25); `entity-graph dates` fills them on older databases.
+
 **Gold eval (does not tune thresholds).**
 
 ```powershell
