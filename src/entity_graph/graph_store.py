@@ -11,6 +11,7 @@ from datetime import date
 
 from .config import Config, load_config
 from .db import connect
+from .doc_profiles import get_document_profile
 from .extract.decide import judge_relations as decide_judge_relations
 from .extract.gate import awaits_verdict, should_promote
 from .extract.base import is_excluded_type
@@ -51,6 +52,7 @@ def _judge_rows(config: Config, client: SystemOneClient | None, rows: list) -> d
         return verdicts
     verdicts = decide_judge_relations(
         claims, model=config.decide_model, device=config.decide_device,
+        specs=get_document_profile(config.doc_profile).ontology.relation_specs,
     )
     if verdicts:
         log.info("Decide judged %d/%d relation proposals", len(verdicts), len(rows))

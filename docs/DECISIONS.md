@@ -762,3 +762,42 @@ Brain ... from October 2015 to June 2016" dated the OpenAI fact.
 sentence can be read as a tenure date (Fontaine's CNAS membership got the
 August 2026 donation date). Analysis that depends on chronology should check
 the evidence.
+
+## D26 — One pipeline, a document profile per kind of document
+**Status:** accepted · **Date:** 2026-11-01
+
+**Context.** The S-1 evaluation split its failures in two. Some were bugs
+that hurt every document (D21–D25). The rest were about the kind of
+document: an SEC filing needs litigation, supplier, underwriter, auditor and
+counsel relations and a product type (Claude was typed PERSON); its exhibit
+index and signature pages produced the worst edges; its generic role nouns
+differ from a history book's. Separate pipelines would duplicate resolution,
+the gate, the fact store, curation and analysis — the domain-neutral parts
+and the strongest ones.
+
+**Decision.** `doc_profiles.py` defines `DocumentProfile`: an `Ontology`
+(entity descriptions, label → stored type, relation specs), regexes for
+sentence windows not to mine, defaults for the gate profile and excluded
+types, default curation hides, and a gold file. `DOC_PROFILE` selects one
+(`general`, `sec_filing`, `history_book`); explicit env vars still override
+its defaults. The extractor builds its JointIE schema from the profile, the
+Decide gate asks agreement over the profile's relations, `extract` skips
+boilerplate windows, `curate --defaults` applies the profile's hides,
+`eval` defaults to the profile's gold file, and `entity-graph profiles` lists
+them. Profiles extend the general relation set rather than replace it.
+`data/gold/anthropic_s1.jsonl` is the first non-sample key: 60 facts across
+governance, capital, commercial and litigation, plus 7 traps taken from the
+S-1 run's wrong edges; symmetric relations match either direction.
+
+**Why.** Measured on S-1 windows with `sec_filing`: 17 of 3,566 windows
+skipped (a one-link rule would have skipped 514, since every page repeats a
+"Table of Contents" link); `SUED`, `UNDERWRITER_OF`, `ADVISOR_TO` and
+`DEVELOPS` proposals now appear (e.g. `Anthropic PBC SUED Department of
+War`). `eval --from-db` on the pre-change S-1 database: recall 39/60, all 7
+traps leaked — the baseline to beat.
+
+**Consequences.** New relations bring noisy candidates (`we UNDERWRITER_OF
+RSUs`) that only the gate removes, so a profile is not trusted until its gold
+eval is run end to end. Product typing improves but is not settled: in the
+sample, `Claude` was PRODUCT 15, PERSON 21, ORG 10 times; an entity keeps the
+first type it is created with. `history_book` has no gold file yet.

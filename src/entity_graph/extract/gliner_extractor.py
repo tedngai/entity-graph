@@ -20,12 +20,12 @@ import logging
 
 from ..chunking import split_sentences
 from ..config import load_config
+from ..doc_profiles import GENERAL, get_document_profile
 from .base import ExtractionResult, Mention, RelationProposal
 from .ontology import (
-    ENTITY_DESCRIPTIONS,
     LABEL_TO_TYPE,
-    RELATION_SPECS,
     SCHEMA_STEPS,
+    Ontology,
     canonical_pair,
     relation_kwargs,
     stored_relation,
@@ -88,19 +88,19 @@ def _anchor(text: str, surface: str, start: int, end: int) -> tuple[int, int] | 
     return None
 
 
-def build_joint_schema(joint):
-    """Compile the shared ontology into a JointIE schema. Reuse the result."""
-    schema = joint.create_schema().entities(dict(ENTITY_DESCRIPTIONS))
-    for spec in RELATION_SPECS:
+def build_joint_schema(joint, ontology: Ontology = GENERAL.ontology):
+    """Compile an ontology into a JointIE schema. Reuse the result."""
+    schema = joint.create_schema().entities(dict(ontology.entity_descriptions))
+    for spec in ontology.relation_specs:
         schema = schema.relation(spec.name, **relation_kwargs(spec))
     if "no_self_loops" in SCHEMA_STEPS:
         schema = schema.no_self_loops()
     return schema
 
 
-def build_entity_schema(joint):
+def build_entity_schema(joint, ontology: Ontology = GENERAL.ontology):
     """Entities-only JointIE schema: the retry for an infeasible window."""
-    return joint.create_schema().entities(dict(ENTITY_DESCRIPTIONS))
+    return joint.create_schema().entities(dict(ontology.entity_descriptions))
 
 
 def parse_joint_payload(
@@ -109,6 +109,7 @@ def parse_joint_payload(
     *,
     feasible: bool = True,
     doc_key: str = "",
+    label_to_type: dict[str, str] | None = None,
 ) -> ExtractionResult:
     """Turn a JointIE ``to_dict()`` payload into the extraction contract.
 
@@ -131,7 +132,7 @@ def parse_joint_payload(
         label = str(ent.get("type") or "").strip().lower()
         mention = Mention(
             surface=surface,
-            entity_type=LABEL_TO_TYPE.get(label, "MISC"),
+            entity_type=(label_to_type or LABEL_TO_TYPE).get(label, "MISC"),
             start=start,
             end=end,
             confidence=_clamp(ent.get("confidence", 0.5)),
@@ -191,6 +192,7 @@ class GlinerExtractor:
         self.model_name = model or config.gliner_model or DEFAULT_MODEL
         self.threshold = config.gliner_threshold if threshold is None else threshold
         self.device = device or config.gliner_device or "auto"
+        self.ontology = get_document_profile(config.doc_profile).ontology
         self._mode = "joint"
         self._model = None
         self._schema = None
@@ -229,8 +231,8 @@ class GlinerExtractor:
         except TypeError:
             self._model = JointIE.from_pretrained(self.model_name)
         try:
-            self._schema = build_joint_schema(self._model)
-            self._entity_schema = build_entity_schema(self._model)
+            self._schema = build_joint_schema(self._model, self.ontology)
+            self._entity_schema = build_entity_schema(self._model, self.ontology)
             self._joint_config = _joint_config(JointIEConfig, self.threshold)
         except (AttributeError, TypeError) as exc:
             log.warning(
@@ -266,7 +268,10 @@ class GlinerExtractor:
                     text, self._entity_schema, config=self._joint_config
                 )
             payload = result.to_dict() if hasattr(result, "to_dict") else {}
-            parsed = parse_joint_payload(payload, text, feasible=feasible, doc_key=doc_key)
+            parsed = parse_joint_payload(
+                payload, text, feasible=feasible, doc_key=doc_key,
+                label_to_type=self.ontology.label_to_type,
+            )
         else:
             parsed = self._extract_independent(text, doc_key)
         log.info(
@@ -277,8 +282,10 @@ class GlinerExtractor:
 
     def _extract_independent(self, text: str, doc_key: str) -> ExtractionResult:
         """Legacy path: entities and relations decoded separately, untyped."""
-        labels = list(ENTITY_DESCRIPTIONS)
-        relation_labels = [spec.name.replace("_", " ") for spec in RELATION_SPECS]
+        labels = list(self.ontology.entity_descriptions)
+        relation_labels = [
+            spec.name.replace("_", " ") for spec in self.ontology.relation_specs
+        ]
         schema = self._model.create_schema().entities(labels).relations(relation_labels)
         result = self._model.extract(
             text,
@@ -289,7 +296,7 @@ class GlinerExtractor:
         )
         mentions: list[Mention] = []
         for label, items in (result.get("entities") or {}).items():
-            entity_type = LABEL_TO_TYPE.get(str(label).lower(), "MISC")
+            entity_type = self.ontology.label_to_type.get(str(label).lower(), "MISC")
             for item in items or []:
                 surface = str(item.get("text", "")).strip()
                 if not surface:

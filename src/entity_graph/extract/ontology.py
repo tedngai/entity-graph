@@ -89,6 +89,19 @@ RELATION_SPECS: tuple[RelationSpec, ...] = (
     RelationSpec("subsidiary_of", ("organization",), ("organization",), unique_head=True),
 )
 
+@dataclass(frozen=True)
+class Ontology:
+    """Entity labels (with descriptions), their stored types, and relations.
+
+    The module constants below are the general ontology; document profiles
+    (``doc_profiles.py``, D26) define others.
+    """
+
+    entity_descriptions: dict[str, str]
+    label_to_type: dict[str, str]
+    relation_specs: tuple[RelationSpec, ...]
+
+
 # The extractor always finishes the JointIE schema with this constraint.
 SCHEMA_STEPS: tuple[str, ...] = ("entities", "relations", "no_self_loops")
 
@@ -111,9 +124,17 @@ def relation_kwargs(spec: RelationSpec) -> dict:
 
 
 def is_symmetric(relation: str) -> bool:
-    """True when the stored relation name is a symmetric spec (A~B == B~A)."""
+    """True when the stored relation name is a symmetric spec (A~B == B~A).
+
+    Checked against every profile's relations, so a symmetric relation is
+    stored undirected whichever profile proposed it.
+    """
+    from ..doc_profiles import all_relation_specs
+
     name = stored_relation(relation)
-    return any(spec.symmetric and stored_relation(spec.name) == name for spec in RELATION_SPECS)
+    return any(
+        spec.symmetric and stored_relation(spec.name) == name for spec in all_relation_specs()
+    )
 
 
 def canonical_pair(relation: str, source: str, target: str) -> bool:
@@ -125,14 +146,18 @@ def canonical_pair(relation: str, source: str, target: str) -> bool:
     return is_symmetric(relation) and source.casefold() > target.casefold()
 
 
-def legal_relations(head_type: str | None, tail_type: str | None) -> list[str]:
+def legal_relations(
+    head_type: str | None,
+    tail_type: str | None,
+    specs: tuple[RelationSpec, ...] | None = None,
+) -> list[str]:
     """Stored relation names the ontology allows between these endpoint types."""
     head = canonical_type(head_type)
     tail = canonical_type(tail_type)
     if not head or not tail:
         return []
     names: list[str] = []
-    for spec in RELATION_SPECS:
+    for spec in RELATION_SPECS if specs is None else specs:
         forward = head in spec.head and tail in spec.tail
         backward = spec.symmetric and tail in spec.head and head in spec.tail
         if forward or backward:
@@ -140,6 +165,10 @@ def legal_relations(head_type: str | None, tail_type: str | None) -> list[str]:
     return names
 
 
-def legal_display_labels(head_type: str | None, tail_type: str | None) -> list[str]:
+def legal_display_labels(
+    head_type: str | None,
+    tail_type: str | None,
+    specs: tuple[RelationSpec, ...] | None = None,
+) -> list[str]:
     """Plain-word labels for a Decide relation question, without ``no relation``."""
-    return [display_relation(name) for name in legal_relations(head_type, tail_type)]
+    return [display_relation(name) for name in legal_relations(head_type, tail_type, specs)]

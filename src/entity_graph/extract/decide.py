@@ -32,12 +32,14 @@ def judge_relations(
     model: str = "fastino/GLiNER2.5-Decide",
     device: str = "auto",
     classify: ClassifyFn | None = None,
+    specs: tuple | None = None,
 ) -> dict[int, RelationJudgment]:
     """Score claims with Decide. ``classify`` is injectable for tests.
 
     A claim the model cannot score is omitted. The promotion rule treats a
     missing judgment as unscored (promote on extractor confidence), not as a
-    rejection.
+    rejection. ``specs`` is the document profile's relation set (default: the
+    general ontology).
     """
     if not claims:
         return {}
@@ -56,7 +58,7 @@ def judge_relations(
         except Exception as exc:  # noqa: BLE001 - one bad window must not abort the build
             log.warning("Decide modality failed for claim %s (%s)", claim.get("id"), exc)
             continue
-        agrees = _relation_agrees(classify, claim, evidence)
+        agrees = _relation_agrees(classify, claim, evidence, specs)
         verdicts[int(claim["id"])] = RelationJudgment(
             assertion=confidence,
             modality=normalize_modality(modality),
@@ -66,10 +68,12 @@ def judge_relations(
     return verdicts
 
 
-def _relation_agrees(classify: ClassifyFn, claim: dict, evidence: str) -> bool | None:
+def _relation_agrees(
+    classify: ClassifyFn, claim: dict, evidence: str, specs: tuple | None = None
+) -> bool | None:
     """Argmax agreement with the proposed relation, or None if types are unknown."""
     labels = [_clean(label) for label in legal_display_labels(
-        claim.get("source_type"), claim.get("target_type")
+        claim.get("source_type"), claim.get("target_type"), specs
     )]
     labels = [label for label in labels if label]
     if not labels:

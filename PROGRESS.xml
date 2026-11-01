@@ -83,6 +83,14 @@
       <task id="P7.4" name="Temporal analysis (facts valid_from/valid_to)" status="todo" notes="facts now carry dates (P7.5); analysis over them is still todo"/>
     </phase>
 
+    <phase id="P9" name="Document profiles" status="in-progress">
+      <task id="P9.1" name="DocumentProfile: ontology, skipped windows, defaults, hides, gold" status="done" notes="doc_profiles.py (general, sec_filing, history_book); DOC_PROFILE; extractor/Decide/pipeline/curate --defaults/eval read it; entity-graph profiles. tests/test_doc_profiles.py. DECISIONS.md D26"/>
+      <task id="P9.2" name="S-1 gold key (60 facts, 7 traps)" status="done" notes="data/gold/anthropic_s1.jsonl, evidence verified against the filing; eval matches symmetric relations either way. Pre-change S-1 DB: recall 39/60, 7/7 traps leaked"/>
+      <task id="P9.3" name="Re-run the S-1 end to end under sec_filing and score it" status="todo" notes="resolve + build need ~70 min of Pratt pratt-d3 calls"/>
+      <task id="P9.4" name="Gold key for the Shanghai book (history_book)" status="todo"/>
+      <task id="P9.5" name="Entity type by majority vote across mentions (Claude PRODUCT vs PERSON)" status="todo"/>
+    </phase>
+
     <phase id="P8" name="Hardening" status="in-progress">
       <task id="P8.1" name="Extraction quality eval set (golden facts) + precision/recall report" status="done" notes="data/gold/greengrid_partnership.jsonl (facts, nonfacts, traps) + entity-graph eval. Scores alias-aware triples and prints a threshold sweep. Does not write RELATION_VALIDATION_THRESHOLD. D15"/>
       <task id="P8.2" name="Batch performance test on 100+ docs; tune GLiNER2 thresholds" status="todo"/>
@@ -117,6 +125,7 @@
     <decision id="D23" title="The graph views never expose a self-loop" ref="docs/DECISIONS.md#d23"/>
     <decision id="D24" title="Defined terms resolve to their long form, scoped to their document" ref="docs/DECISIONS.md#d24"/>
     <decision id="D25" title="Facts carry validity dates read from their evidence" ref="docs/DECISIONS.md#d25"/>
+    <decision id="D26" title="One pipeline, a document profile per kind of document" ref="docs/DECISIONS.md#d26"/>
   </decisions>
 
   <risks>

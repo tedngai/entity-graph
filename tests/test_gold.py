@@ -59,3 +59,14 @@ def test_sweep_does_not_write_the_cutoff() -> None:
     by_cutoff = {row["threshold"]: row["matched"] for row in rows}
     assert by_cutoff[0.3] == 1
     assert by_cutoff[0.5] == 0
+
+
+def test_symmetric_gold_facts_match_either_direction() -> None:
+    from entity_graph.eval_facts import GoldFact, matches
+
+    gold = GoldFact(doc="", subject="Anthropic", subject_aliases=(), relation="PARTNERED_WITH",
+                    object="Google", object_aliases=(), modality="fact", role="fact")
+    assert matches({"subject": "Google", "relation": "PARTNERED_WITH", "object": "Anthropic"}, gold)
+    flipped = GoldFact(doc="", subject="Amazon", subject_aliases=(), relation="INVESTED_IN",
+                       object="Anthropic", object_aliases=(), modality="fact", role="fact")
+    assert not matches({"subject": "Anthropic", "relation": "INVESTED_IN", "object": "Amazon"}, flipped)

@@ -23,6 +23,10 @@ class Config:
     # Extraction backend: baseline | spacy | gliner2
     extraction_backend: str = "baseline"
 
+    # Document profile (doc_profiles.py, D26): ontology, skipped windows, and
+    # defaults for the settings below. general | sec_filing | history_book.
+    doc_profile: str = "general"
+
     # GLiNER2 (primary extractor). device: auto | cpu | cuda
     gliner_model: str = "fastino/gliner2.5-base-v1"
     gliner_device: str = "auto"
@@ -121,6 +125,11 @@ def load_config() -> Config:
         jev_model_default = "typesafe/jev-1.13"
         jev_key_default = openrouter_key
 
+    # A document profile supplies defaults; explicit env vars still win.
+    from .doc_profiles import get_document_profile
+
+    profile = get_document_profile(env("DOC_PROFILE", "general"))
+
     return Config(
         pg_host=env("PG_HOST", "localhost"),
         pg_port=int(env("PG_PORT", "5432")),
@@ -128,12 +137,15 @@ def load_config() -> Config:
         pg_user=env("PG_USER", "postgres"),
         pg_password=env("PG_PASSWORD", "postgres"),
         extraction_backend=env("EXTRACTION_BACKEND", "baseline"),
+        doc_profile=profile.name,
         gliner_model=env("GLINER_MODEL", "fastino/gliner2.5-base-v1"),
         gliner_device=env("GLINER_DEVICE", "auto"),
         gliner_threshold=float(env("GLINER_THRESHOLD", "0.4")),
         exclude_entity_types=frozenset(
             t.strip().upper()
-            for t in env("EXCLUDE_ENTITY_TYPES", "DATE").split(",")
+            for t in env(
+                "EXCLUDE_ENTITY_TYPES", ",".join(sorted(profile.exclude_entity_types))
+            ).split(",")
             if t.strip()
         ),
         decide_model=env("DECIDE_MODEL", "fastino/GLiNER2.5-Decide"),
@@ -151,7 +163,7 @@ def load_config() -> Config:
         systemone_url=env("SYSTEMONE_URL", jev_url_default),
         systemone_api_key=env("SYSTEMONE_API_KEY", "") or jev_key_default,
         systemone_model=env("SYSTEMONE_MODEL", jev_model_default),
-        systemone_profile=env("SYSTEMONE_PROFILE", ""),
+        systemone_profile=env("SYSTEMONE_PROFILE", profile.systemone_profile),
         openrouter_referer=env("OPENROUTER_REFERER", ""),
         openrouter_title=env("OPENROUTER_TITLE", "entity-graph"),
         schema_path=Path(env("SCHEMA_PATH", "db/schema.sql")),

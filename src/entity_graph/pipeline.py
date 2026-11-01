@@ -9,6 +9,7 @@ from pathlib import Path
 from .chunking import Chunk, chunk_text
 from .config import Config, load_config
 from .db import connect
+from .doc_profiles import get_document_profile
 from .extract.base import (
     ExtractionResult,
     Extractor,
@@ -49,7 +50,8 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
     """Run the extractor over a document, chunking long texts into windows.
 
     Short documents (a single window) go straight to the extractor. Longer
-    documents are extracted window by window and the results merged: mention
+    documents are extracted window by window, skipping windows the document
+    profile marks as boilerplate (D26), and the results merged: mention
     offsets are rebased to the full document and overlap-induced duplicates are
     collapsed (mentions by span, relations by (source, target, relation)).
     """
@@ -63,9 +65,14 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
         return extractor.extract(text, doc_key)
 
     log.info("Chunked %s into %d sentence windows", doc_key or "document", len(chunks))
+    profile = get_document_profile(config.doc_profile)
     mentions: dict[tuple, Mention] = {}
     relations: dict[tuple, RelationProposal] = {}
+    skipped = 0
     for chunk in chunks:
+        if profile.skips(chunk.text):
+            skipped += 1
+            continue
         result = extractor.extract(chunk.text, doc_key)
         for mention in result.mentions:
             rebased = _rebase_mention(mention, chunk)
@@ -82,6 +89,8 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
             if prev is None or proposal.confidence > prev.confidence:
                 relations[key] = proposal
 
+    if skipped:
+        log.info("Skipped %d boilerplate window(s) (profile %s)", skipped, profile.name)
     return ExtractionResult(
         doc_key=doc_key,
         mentions=list(mentions.values()),

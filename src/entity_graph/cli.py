@@ -22,6 +22,8 @@ def _parser() -> argparse.ArgumentParser:
 
     sub.add_parser("init-db", help="apply db/schema.sql to the database")
 
+    sub.add_parser("profiles", help="list document profiles (select with DOC_PROFILE)")
+
     p_pre = sub.add_parser(
         "preprocess",
         help="clean OCR text and write it out (no database; useful for inspection)",
@@ -47,8 +49,10 @@ def _parser() -> argparse.ArgumentParser:
         "curate",
         help="merge duplicates / hide non-actors from a JSON curation file (never deletes)",
     )
-    p_curate.add_argument("--file", required=True,
+    p_curate.add_argument("--file", default=None,
                           help='JSON: {"merges": [[winner, loser], ...], "hide": [name, ...]}')
+    p_curate.add_argument("--defaults", action="store_true",
+                          help="also hide the document profile's generic non-actors")
     p_curate.add_argument("--dry-run", action="store_true",
                           help="report what would change without applying it")
 
@@ -76,8 +80,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     p_eval.add_argument(
         "--gold",
-        default="data/gold/greengrid_partnership.jsonl",
-        help="JSONL gold facts (fact / nonfact / trap)",
+        default=None,
+        help="JSONL gold facts (fact / nonfact / trap); default: the document "
+             "profile's gold file",
     )
     p_eval.add_argument(
         "--predictions",
@@ -116,6 +121,19 @@ def main(argv: list[str] | None = None) -> int:
         from .db import apply_schema
         apply_schema(config)
         print(f"Schema applied to {config.pg_db}@{config.pg_host}:{config.pg_port}")
+
+    elif args.command == "profiles":
+        from .doc_profiles import PROFILES
+        for profile in PROFILES.values():
+            marker = "*" if profile.name == config.doc_profile else " "
+            relations = ", ".join(
+                spec.name for spec in profile.ontology.relation_specs
+            )
+            print(f"{marker} {profile.name}: {profile.description}")
+            print(f"    relations: {relations}")
+            print(f"    skipped-window patterns: {len(profile.skip_window_patterns)}  "
+                  f"default hides: {len(profile.default_hide)}  "
+                  f"gold: {profile.gold_path or '-'}")
 
     elif args.command == "ingest":
         from .ingest import ingest_directory
@@ -157,8 +175,15 @@ def main(argv: list[str] | None = None) -> int:
                       f"score={score}  {sidecars}")
 
     elif args.command == "curate":
-        from .curate import apply_curation, load_curation
-        spec = load_curation(args.file)
+        from .curate import CurationSpec, apply_curation, load_curation
+        from .doc_profiles import get_document_profile
+        if not args.file and not args.defaults:
+            print("Give --file curation.json, --defaults, or both.")
+            return 1
+        spec = load_curation(args.file) if args.file else CurationSpec()
+        if args.defaults:
+            defaults = get_document_profile(config.doc_profile).default_hide
+            spec.hide = list(dict.fromkeys([*defaults, *spec.hide]))
         summary = apply_curation(spec, config, dry_run=args.dry_run)
         verb = "Would merge" if args.dry_run else "Merged"
         for old_name, new_name in summary["renamed"]:
@@ -231,7 +256,13 @@ def _eval(args, config) -> int:
     )
     from .extract.jev import RELATION_VALIDATION_THRESHOLD
 
-    gold_path = Path(args.gold)
+    from .doc_profiles import get_document_profile
+
+    gold_path = Path(
+        args.gold
+        or get_document_profile(config.doc_profile).gold_path
+        or "data/gold/greengrid_partnership.jsonl"
+    )
     if not gold_path.exists():
         print(f"Gold file not found: {gold_path}")
         return 1

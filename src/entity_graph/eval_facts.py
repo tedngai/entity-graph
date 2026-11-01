@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .extract.gate import RelationJudgment, normalize_modality, should_promote
-from .extract.ontology import stored_relation
+from .extract.ontology import is_symmetric, stored_relation
 
 # Informational only. The live cutoff stays in extract/jev.py.
 SWEEP_THRESHOLDS: tuple[float, ...] = (0.3, 0.4, 0.5, 0.6, 0.7)
@@ -75,17 +75,23 @@ def _doc_ok(prediction: dict, gold: GoldFact) -> bool:
 
 
 def matches(prediction: dict, gold: GoldFact) -> bool:
-    """Alias-aware, direction-sensitive match. Relation spelling is normalized."""
+    """Alias-aware match. Relation spelling is normalized.
+
+    Direction matters except for symmetric relations (PARTNERED_WITH), which
+    are stored in canonical endpoint order (D21) and match either way.
+    """
     if not _doc_ok(prediction, gold):
         return False
     subject = _norm(str(prediction.get("subject") or prediction.get("source") or ""))
     obj = _norm(str(prediction.get("object") or prediction.get("target") or ""))
     relation = stored_relation(str(prediction.get("relation") or ""))
-    return (
-        subject in _names(gold.subject, gold.subject_aliases)
-        and obj in _names(gold.object, gold.object_aliases)
-        and relation == stored_relation(gold.relation)
-    )
+    if relation != stored_relation(gold.relation):
+        return False
+    subjects = _names(gold.subject, gold.subject_aliases)
+    objects = _names(gold.object, gold.object_aliases)
+    if subject in subjects and obj in objects:
+        return True
+    return is_symmetric(relation) and subject in objects and obj in subjects
 
 
 def load_gold(path: str | Path) -> list[GoldFact]:
