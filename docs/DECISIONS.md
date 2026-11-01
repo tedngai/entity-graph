@@ -632,3 +632,32 @@ choice 0.997 on a registration-statement probe.
 
 
 
+
+## D21 — Symmetric relations are decoded directed and canonicalized afterwards
+**Status:** accepted · **Date:** 2026-11-01
+
+**Context.** The S-1 evaluation found zero `PARTNERED_WITH` proposals across
+1,421 (S-1) and 2,520 (Shanghai book) proposals, although the relation is in
+the ontology. Probing JointIE directly showed why: with `symmetric=True` the
+decoder either never emits the relation or the greedy repair fails and the
+window comes back *empty* — entities included. "Anthropic partnered with
+Google and Broadcom" returned nothing; without the flag it returned
+`partnered_with` at 0.97/0.95. Infeasible windows were 118/3,566 on the S-1
+and 79/1,272 on the book, and each lost all of its mentions, contrary to the
+D13 promise that an infeasible window keeps its mentions.
+
+**Decision.** `relation_kwargs` no longer passes `symmetric` to JointIE.
+`RelationSpec.symmetric` stays as ontology metadata: `parse_joint_payload`
+swaps a symmetric pair into case-insensitive lexical order
+(`canonical_pair`), and `build` orders the endpoint ids and stores the edge
+with `is_directed = false`, so A~B and B~A are one edge. An infeasible window
+is re-decoded with an entities-only schema, so it keeps its mentions; its
+relations are still dropped (D13).
+
+**Why.** Measured on 446 evenly spaced S-1 windows: infeasible 18 → 0,
+entities 4,716 → 4,988, `partnered_with` 0 → 149 candidates; the other
+relations are unchanged or slightly up. The new candidates include noise
+(`Claude ~ customers`), which is what the relation gate is for.
+
+**Consequences.** Existing databases keep their old proposals; re-extract to
+gain partnerships. More ORG–ORG candidates means more gate calls at build.

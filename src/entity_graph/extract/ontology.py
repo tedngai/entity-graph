@@ -94,15 +94,35 @@ SCHEMA_STEPS: tuple[str, ...] = ("entities", "relations", "no_self_loops")
 
 
 def relation_kwargs(spec: RelationSpec) -> dict:
-    """Keyword arguments for ``JointSchema.relation``, minus the name."""
+    """Keyword arguments for ``JointSchema.relation``, minus the name.
+
+    ``symmetric`` is deliberately not passed to the decoder: with it, JointIE
+    either never emits the relation or returns an empty, infeasible window
+    (0 PARTNERED_WITH proposals across the S-1 and the Shanghai book). The
+    relation is decoded directed and canonicalized afterwards by
+    ``canonical_pair``. See DECISIONS.md D21.
+    """
     head: str | list[str] = spec.head[0] if len(spec.head) == 1 else list(spec.head)
     tail: str | list[str] = spec.tail[0] if len(spec.tail) == 1 else list(spec.tail)
     kwargs: dict = {"head": head, "tail": tail}
     if spec.unique_head:
         kwargs["unique_head"] = True
-    if spec.symmetric:
-        kwargs["symmetric"] = True
     return kwargs
+
+
+def is_symmetric(relation: str) -> bool:
+    """True when the stored relation name is a symmetric spec (A~B == B~A)."""
+    name = stored_relation(relation)
+    return any(spec.symmetric and stored_relation(spec.name) == name for spec in RELATION_SPECS)
+
+
+def canonical_pair(relation: str, source: str, target: str) -> bool:
+    """True when (source, target) must be swapped to the canonical order.
+
+    Symmetric relations are stored once, with endpoints in case-insensitive
+    lexical order, so ``A partnered_with B`` and ``B partnered_with A`` collapse.
+    """
+    return is_symmetric(relation) and source.casefold() > target.casefold()
 
 
 def legal_relations(head_type: str | None, tail_type: str | None) -> list[str]:

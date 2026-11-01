@@ -26,6 +26,7 @@ from .ontology import (
     LABEL_TO_TYPE,
     RELATION_SPECS,
     SCHEMA_STEPS,
+    canonical_pair,
     relation_kwargs,
     stored_relation,
 )
@@ -97,6 +98,11 @@ def build_joint_schema(joint):
     return schema
 
 
+def build_entity_schema(joint):
+    """Entities-only JointIE schema: the retry for an infeasible window."""
+    return joint.create_schema().entities(dict(ENTITY_DESCRIPTIONS))
+
+
 def parse_joint_payload(
     payload: dict,
     text: str,
@@ -155,6 +161,9 @@ def parse_joint_payload(
             relation_name = stored_relation(str(rel.get("type") or ""))
             if not relation_name:
                 continue
+            if canonical_pair(relation_name, head_mention.surface, tail_mention.surface):
+                head_mention, tail_mention = tail_mention, head_mention
+                head_label, tail_label = tail_label, head_label
             relations.append(
                 RelationProposal(
                     source_surface=head_mention.surface,
@@ -185,6 +194,7 @@ class GlinerExtractor:
         self._mode = "joint"
         self._model = None
         self._schema = None
+        self._entity_schema = None
         self._joint_config = None
         self._load()
 
@@ -220,6 +230,7 @@ class GlinerExtractor:
             self._model = JointIE.from_pretrained(self.model_name)
         try:
             self._schema = build_joint_schema(self._model)
+            self._entity_schema = build_entity_schema(self._model)
             self._joint_config = _joint_config(JointIEConfig, self.threshold)
         except (AttributeError, TypeError) as exc:
             log.warning(
@@ -244,9 +255,15 @@ class GlinerExtractor:
             result = self._model.extract(text, self._schema, config=self._joint_config)
             feasible = bool(getattr(result, "feasible", True))
             if not feasible:
+                # An infeasible decode returns an empty payload, mentions
+                # included. Re-decode entities only, so the window keeps its
+                # mentions; its relations are still dropped (D13, D21).
                 log.warning(
-                    "JointIE infeasible for %s; keeping mentions and dropping relations",
+                    "JointIE infeasible for %s; re-decoding entities only",
                     doc_key or "document",
+                )
+                result = self._model.extract(
+                    text, self._entity_schema, config=self._joint_config
                 )
             payload = result.to_dict() if hasattr(result, "to_dict") else {}
             parsed = parse_joint_payload(payload, text, feasible=feasible, doc_key=doc_key)

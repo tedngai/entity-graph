@@ -45,3 +45,17 @@ def test_infeasible_joint_result_drops_relations() -> None:
     result = parse_joint_payload(_payload(), TEXT, feasible=False, doc_key="sample")
     assert result.mentions
     assert result.relations == []
+
+
+def test_symmetric_relation_is_stored_in_canonical_order() -> None:
+    text = "Solaris Energy partnered with GreenGrid."
+    payload = {
+        "entities": [
+            {"id": "a", "type": "organization", "text": "Solaris Energy", "start": 0, "end": 14},
+            {"id": "b", "type": "organization", "text": "GreenGrid", "start": 30, "end": 39},
+        ],
+        "relations": [{"type": "partnered_with", "head": "a", "tail": "b", "confidence": 0.9}],
+    }
+    (rel,) = parse_joint_payload(payload, text).relations
+    assert (rel.source_surface, rel.target_surface) == ("GreenGrid", "Solaris Energy")
+    assert "partnered" in rel.evidence

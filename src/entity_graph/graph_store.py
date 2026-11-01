@@ -19,6 +19,7 @@ from .extract.jev import (
     SystemOneClient,
     judge_relations,
 )
+from .extract.ontology import is_symmetric
 from .extract.profiles import get_profile
 from .resolve import add_alias, entity_for_surface_in_doc, ensure_entity
 
@@ -188,10 +189,16 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
             dst_id = entity_for_surface_in_doc(cur, dst, doc_id) or ensure_entity(
                 cur, dst, target_type
             )
+            symmetric = is_symmetric(relation)
+            if symmetric and src_id > dst_id:
+                # One undirected edge per pair, whichever surface came first.
+                src_id, dst_id = dst_id, src_id
             if src_id == dst_id:
                 log.debug("Skipping self-relation proposal %s (%s)", pid, src)
             else:
-                relationship_id = upsert_relationship(cur, src_id, dst_id, relation)
+                relationship_id = upsert_relationship(
+                    cur, src_id, dst_id, relation, is_directed=not symmetric
+                )
                 statement = f"{src} {relation.lower().replace('_', ' ')} {dst}"
                 record_fact(cur, relationship_id, doc_id, statement, evidence or "",
                             extractor, confidence)

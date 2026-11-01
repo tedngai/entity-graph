@@ -48,6 +48,7 @@
       <task id="P4.4" name="GLiNER2 extractor backend (primary)" status="done" notes="JointIE on fastino/gliner2.5-base-v1 with typed endpoints from extract/ontology.py (D13). Independent .relations() remains only if gliner2.joint_ie is missing. Earlier AutoExtractor path verified live on RTX 2000 Ada. See DECISIONS.md D8/D13"/>
       <task id="P4.7" name="JointIE typed relation decoding" status="done" notes="beam search, no_self_loops, unique_head on leads/subsidiary_of, symmetric partnered_with. Infeasible graphs drop relations rather than store an inconsistent graph. source_type/target_type persisted. D13"/>
       <task id="P4.5" name="LLM escalation path for ambiguous documents" status="done" notes="LlmExtractor (OpenAI-compatible chat completions; Pratt router pratt-medium when PRATT_LLM_API_KEY is set, else OpenRouter gpt-4o-mini) + EscalatingExtractor wrapper (opt-in via EXTRACTION_ESCALATE/--escalate). Triggers: no mentions, no relations, majority low-confidence, or sparse relation density. Verified live: pure 'llm' backend end-to-end (gpt-4o-mini) and spaCy+escalate; Pratt pratt-medium verified live. See DECISIONS.md D11/D12"/>
+      <task id="P4.8" name="Symmetric relations decode again; infeasible windows keep mentions" status="done" notes="JointIE's symmetric flag silenced partnered_with (0 proposals on the S-1 and the book) and emptied infeasible windows. Decoded directed, canonicalized after (canonical_pair; build stores is_directed=false); infeasible windows re-decoded entities-only. 446 S-1 windows: infeasible 18 -> 0, partnered_with 0 -> 149. DECISIONS.md D21"/>
       <task id="P4.6" name="Persist mentions + proposed relations to Postgres" status="done" depends="P2.3" notes="pipeline.extract_documents already records mentions + relation_proposals; verified end-to-end with gliner2 (41 mentions, 27 proposals -> 27 facts persisted)"/>
     </phase>
 
@@ -107,6 +108,7 @@
     <decision id="D18" title="Non-node types are dropped, the graph view is connected-only, surfaces are normalized" ref="docs/DECISIONS.md#d18"/>
     <decision id="D19" title="Curation is two reversible primitives: merge (repoints edges) and hide" ref="docs/DECISIONS.md#d19"/>
     <decision id="D20" title="The Pratt router's default Jev model is pratt-d3" ref="docs/DECISIONS.md#d20"/>
+    <decision id="D21" title="Symmetric relations are decoded directed and canonicalized afterwards" ref="docs/DECISIONS.md#d21"/>
   </decisions>
 
   <risks>
