@@ -86,7 +86,7 @@
     <phase id="P9" name="Document profiles" status="in-progress">
       <task id="P9.1" name="DocumentProfile: ontology, skipped windows, defaults, hides, gold" status="done" notes="doc_profiles.py (general, sec_filing, history_book); DOC_PROFILE; extractor/Decide/pipeline/curate --defaults/eval read it; entity-graph profiles. tests/test_doc_profiles.py. DECISIONS.md D26"/>
       <task id="P9.2" name="S-1 gold key (60 facts, 7 traps)" status="done" notes="data/gold/anthropic_s1.jsonl, evidence verified against the filing; eval matches symmetric relations either way. Pre-change S-1 DB: recall 39/60, 7/7 traps leaked"/>
-      <task id="P9.3" name="Re-run the S-1 end to end under sec_filing and score it" status="todo" notes="resolve + build need ~70 min of Pratt pratt-d3 calls"/>
+      <task id="P9.3" name="Re-run the S-1 end to end under sec_filing and score it" status="in-progress" notes="Extract done 2026-11-01 into entity_graph_anthropic_s1_v2 (old DB untouched): infeasible windows 118 -> 0, 17 boilerplate windows skipped, mentions 30,011 -> 33,836, proposals 1,421 -> 2,587 (PARTNERED_WITH 283, DEVELOPS 251, ADVISOR_TO 200, UNDERWRITER_OF 147, SUED 132, AUDITOR_OF 44, SUPPLIES 9). 'Claude' mentions now PRODUCT 214 / ORG 123 / PERSON 109. Candidates include Reddit SUED Anthropic, Anthropic SUED Department of War; underwriter/auditor/supplier candidates mostly miss the registrant. Still to do: resolve + build (~70 min of pratt-d3 calls), then eval --from-db."/>
       <task id="P9.4" name="Gold key for the Shanghai book (history_book)" status="todo"/>
       <task id="P9.5" name="Entity type by majority vote across mentions (Claude PRODUCT vs PERSON)" status="todo"/>
     </phase>
