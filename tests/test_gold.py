@@ -70,3 +70,12 @@ def test_symmetric_gold_facts_match_either_direction() -> None:
     flipped = GoldFact(doc="", subject="Amazon", subject_aliases=(), relation="INVESTED_IN",
                        object="Anthropic", object_aliases=(), modality="fact", role="fact")
     assert not matches({"subject": "Anthropic", "relation": "INVESTED_IN", "object": "Amazon"}, flipped)
+
+
+def test_trailing_period_does_not_block_a_match() -> None:
+    from entity_graph.eval_facts import GoldFact, matches
+
+    gold = GoldFact(doc="", subject="Reddit, Inc.", subject_aliases=(), relation="SUED",
+                    object="Anthropic", object_aliases=("Anthropic, PBC",), modality="fact",
+                    role="fact")
+    assert matches({"subject": "Reddit, Inc", "relation": "SUED", "object": "Anthropic, PBC"}, gold)

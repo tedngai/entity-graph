@@ -60,7 +60,9 @@ class Score:
 
 
 def _norm(text: str) -> str:
-    return " ".join(text.casefold().replace("_", " ").split())
+    # A trailing period is not part of the name: a span ending "Inc." at a
+    # sentence end is often stored as "Inc" ("Reddit, Inc" in the S-1).
+    return " ".join(text.casefold().replace("_", " ").split()).rstrip(".")
 
 
 def _names(canonical: str, aliases: tuple[str, ...]) -> set[str]:
