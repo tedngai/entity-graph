@@ -22,6 +22,7 @@ from .extract.jev import (
 from .extract.ontology import is_symmetric
 from .extract.profiles import get_profile
 from .resolve import add_alias, entity_for_surface_in_doc, ensure_entity
+from .temporal import fact_validity
 
 log = logging.getLogger(__name__)
 
@@ -207,8 +208,9 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
                     cur, src_id, dst_id, relation, is_directed=not symmetric
                 )
                 statement = f"{src} {relation.lower().replace('_', ' ')} {dst}"
+                valid_from, valid_to = fact_validity(evidence or "", [dst], [src])
                 record_fact(cur, relationship_id, doc_id, statement, evidence or "",
-                            extractor, confidence)
+                            extractor, confidence, valid_from, valid_to)
                 built += 1
             cur.execute(
                 "UPDATE relation_proposals SET status = 'promoted', validation = %s, "
@@ -222,6 +224,44 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
         )
     log.info("Built %d relationships from proposals", built)
     return built
+
+
+def _entity_names(cur, entity_id: int) -> list[str]:
+    cur.execute(
+        "SELECT canonical_name FROM entities WHERE id = %s "
+        "UNION SELECT alias FROM entity_aliases WHERE entity_id = %s",
+        (entity_id, entity_id),
+    )
+    return [row[0] for row in cur.fetchall()]
+
+
+def backfill_fact_dates(config: Config | None = None) -> int:
+    """Fill ``valid_from`` / ``valid_to`` on undated facts from their evidence.
+
+    For databases built before facts carried dates (D25). Only facts with both
+    dates NULL are touched; returns how many got at least one date.
+    """
+    config = config or load_config()
+    dated = 0
+    with connect(config) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT f.id, f.evidence_text, r.source_id, r.target_id FROM facts f "
+            "JOIN relationships r ON r.id = f.relationship_id "
+            "WHERE f.valid_from IS NULL AND f.valid_to IS NULL ORDER BY f.id"
+        )
+        for fact_id, evidence, source_id, target_id in cur.fetchall():
+            valid_from, valid_to = fact_validity(
+                evidence or "", _entity_names(cur, target_id), _entity_names(cur, source_id)
+            )
+            if valid_from is None and valid_to is None:
+                continue
+            cur.execute(
+                "UPDATE facts SET valid_from = %s, valid_to = %s WHERE id = %s",
+                (valid_from, valid_to, fact_id),
+            )
+            dated += 1
+    log.info("Dated %d fact(s) from their evidence", dated)
+    return dated
 
 
 # ---------------------------------------------------------------------------

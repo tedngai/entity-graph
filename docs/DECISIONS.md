@@ -733,3 +733,32 @@ translations of titles, which have no preceding mention match.
 unchanged until re-resolved. A true alias that is neither an acronym nor a
 word subset (`Google` ← `Alphabet Inc.`, `Bun` ← `Codeblog Corp.`) is missed
 on purpose.
+
+## D25 — Facts carry validity dates read from their evidence
+**Status:** accepted · **Date:** 2026-11-01
+
+**Context.** DATE is not a node type (D18), so no date reached the graph and
+none of the S-1's 490 facts had `valid_from` / `valid_to`, although its
+biographies date every role.
+
+**Decision.** `temporal.fact_validity(evidence, objects, subjects)` reads a
+date only from prepositional expressions (`from X to Y`, `between X and Y`,
+`since X`, `until X`, `in X`, `as of X`, `1928-1932`) in the sentence naming
+the fact's object: the first after the object, else the last before it —
+unless another organization (`at Google Brain`) or a new clause
+(`, and as a Director of`) sits between. Month precision is kept; a bare year
+starts January 1 and ends December 31. Sentence splitting here does not break
+after honorifics, initials, or `Inc.`. `build` dates every new fact;
+`entity-graph dates` backfills facts whose dates are both NULL.
+
+**Why.** Applied to `entity_graph_anthropic_s1`: 63 facts dated. The bio
+ranges come out exactly (Rao: Bain 2005-09..2008-07, Blackstone, Airbnb,
+Cedar, Fanatics; Daniela Amodei at Stripe 2013-05..2018-07; Liddell in the
+U.S. government 2017-01..2021-01; acquisitions dated to their month). Without
+the blocker rule, "Before joining OpenAI, Dr. Amodei served ... at Google
+Brain ... from October 2015 to June 2016" dated the OpenAI fact.
+
+**Consequences.** A heuristic, not a parser: an event date in the same
+sentence can be read as a tenure date (Fontaine's CNAS membership got the
+August 2026 donation date). Analysis that depends on chronology should check
+the evidence.

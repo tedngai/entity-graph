@@ -79,7 +79,8 @@
       <task id="P7.1" name="analyze.py: degree/betweenness/eigenvector centrality + louvain communities" status="done" notes="CLI report to stdout"/>
       <task id="P7.2" name="visualize.py: pyvis interactive HTML with type-based colors" status="done" notes="Requires [viz] extra"/>
       <task id="P7.3" name="Static matplotlib figures for reports" status="todo"/>
-      <task id="P7.4" name="Temporal analysis (facts valid_from/valid_to)" status="todo"/>
+      <task id="P7.5" name="Facts carry validity dates from their evidence" status="done" notes="temporal.fact_validity: prepositional date expressions in the object's sentence, nearest after (else before), blocked by another organization or a new clause. build dates new facts; `entity-graph dates` backfills. S-1: 63 facts dated, bio ranges exact. tests/test_temporal.py. DECISIONS.md D25"/>
+      <task id="P7.4" name="Temporal analysis (facts valid_from/valid_to)" status="todo" notes="facts now carry dates (P7.5); analysis over them is still todo"/>
     </phase>
 
     <phase id="P8" name="Hardening" status="in-progress">
@@ -115,6 +116,7 @@
     <decision id="D22" title="A proposal Jev did not answer stays pending" ref="docs/DECISIONS.md#d22"/>
     <decision id="D23" title="The graph views never expose a self-loop" ref="docs/DECISIONS.md#d23"/>
     <decision id="D24" title="Defined terms resolve to their long form, scoped to their document" ref="docs/DECISIONS.md#d24"/>
+    <decision id="D25" title="Facts carry validity dates read from their evidence" ref="docs/DECISIONS.md#d25"/>
   </decisions>
 
   <risks>

@@ -56,6 +56,8 @@ def _parser() -> argparse.ArgumentParser:
     p_build.add_argument("--no-validate", action="store_true",
                          help="skip Jev relation validation (promote on extractor confidence)")
 
+    sub.add_parser("dates", help="fill fact valid_from/valid_to from evidence (undated facts only)")
+
     sub.add_parser("analyze", help="NetworkX report (degree, betweenness, communities)")
 
     p_viz = sub.add_parser("visualize", help="interactive HTML graph via pyvis")
@@ -174,6 +176,10 @@ def main(argv: list[str] | None = None) -> int:
         from .pipeline import build
         built = build(config, validate=not args.no_validate)
         print(f"Built {built} relationship(s) from proposals")
+
+    elif args.command == "dates":
+        from .graph_store import backfill_fact_dates
+        print(f"Dated {backfill_fact_dates(config)} fact(s) from their evidence")
 
     elif args.command == "analyze":
         from .analyze import analyze_graph, format_report
