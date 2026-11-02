@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .chunking import Chunk, chunk_text
 from .config import Config, load_config
+from .coordination import expand_coordination
 from .db import connect
 from .doc_profiles import get_document_profile
 from .extract.base import (
@@ -48,6 +49,12 @@ def _rebase_mention(mention: Mention, chunk: Chunk) -> Mention | None:
 
 def _extract_window(extractor: Extractor, text: str, doc_key: str,
                     ref: SelfReference | None) -> ExtractionResult:
+    """Extract one window, then copy relations across coordinated lists (D30)."""
+    return expand_coordination(_read_window(extractor, text, doc_key, ref), text)
+
+
+def _read_window(extractor: Extractor, text: str, doc_key: str,
+                 ref: SelfReference | None) -> ExtractionResult:
     """Extract one window; with a self-reference, also extract the rewritten
     text, map its mentions and evidence back to the original, and keep both
     readings (D28). Neither wins everywhere: "our Chief Financial Officer"

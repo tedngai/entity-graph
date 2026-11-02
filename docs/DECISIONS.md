@@ -899,3 +899,24 @@ lost one; neither was kept.
 
 **Consequences.** A label is chosen by measurement, not wording taste; add
 one only with a probe result on every gold set.
+
+## D30 — A relation to one member of a list is proposed for every member
+**Status:** accepted · **Date:** 2026-11-01
+
+**Context.** Lists of parties ("Morgan Stanley & Co. LLC, J.P. Morgan
+Securities LLC, and Goldman Sachs & Co. LLC are acting as representatives")
+come out of JointIE with one or two members linked.
+
+**Decision.** `coordination.py`: after a window is extracted, same-type
+mentions joined only by commas, "and" or "or" form a list; a relation with an
+endpoint in a list is copied to the other members (confidence × 0.9, same
+evidence). A relation between two members of one list is not copied. The gate
+judges every copy.
+
+**Why.** Probe, no curation: CoreWeave 40/54 → 42/54 (Morgan Stanley and J.P.
+Morgan UNDERWRITER_OF CoreWeave); Anthropic 49/60 and greengrid 7/9
+unchanged. One more trap proposed (Razavi MEMBER_OF Class T), which the gate
+rejected in the earlier full run.
+
+**Consequences.** Lists whose members get no relation at all (the four LTBT
+trustees, "Switch and Chirisa Technology Parks") are not helped.
