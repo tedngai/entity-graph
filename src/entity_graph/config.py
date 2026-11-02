@@ -52,6 +52,8 @@ class Config:
     llm_api_key: str = ""
     llm_model: str = "openai/gpt-4o-mini"
     escalate: bool = False
+    # LLM relation reader per window (D33): off | all.
+    relation_reader: str = "off"
     escalation_confidence: float = 0.5
 
     # Long-document chunking: sentence windows with overlap (see chunking.py)
@@ -154,6 +156,7 @@ def load_config() -> Config:
         llm_api_key=env("LLM_API_KEY", "") or llm_key_default,
         llm_model=env("LLM_MODEL", llm_model_default),
         escalate=env("EXTRACTION_ESCALATE", "").strip().lower() in ("1", "true", "yes"),
+        relation_reader=env("RELATION_READER", "off").strip().lower(),
         escalation_confidence=float(env("ESCALATION_CONFIDENCE", "0.5")),
         chunk_max_sentences=int(env("CHUNK_MAX_SENTENCES", "8")),
         chunk_overlap_sentences=int(env("CHUNK_OVERLAP_SENTENCES", "2")),

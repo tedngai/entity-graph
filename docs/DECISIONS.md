@@ -964,3 +964,34 @@ measured on full uncurated runs (P9.7).
 
 **Consequences.** More gate calls for relations repeated across windows (at
 most 3× per key).
+
+## D33 — An LLM reads relations among the entities GLiNER found (opt-in)
+**Status:** accepted (opt-in, `RELATION_READER=all`) · **Date:** 2026-11-02
+
+**Context.** After D28–D32 the remaining misses are relations GLiNER never
+links although it tags both entities: auditor, legal counsel, acquisitions,
+lawsuits, list members with no verb of their own. D11's escalation triggers
+(no mentions, no relations, sparse structure) are per document and never fire
+on a filing.
+
+**Decision.** `extract/relation_reader.py`: per window, after GLiNER, an LLM
+gets the window, the entity strings GLiNER found, who "we" is (D28) and the
+profile's relations with a one-line head -> tail meaning, and returns the
+relations the text states among those entities. Both ends must be listed
+entities, the relation must be in the profile and legal for their types, and
+the evidence must be a verbatim quote (else the sentences spanning both ends).
+Proposals join GLiNER's before coordination (D30); the gate judges them.
+Model: `LLM_MODEL` (Pratt default `pratt-medium`, an internal deployment) with
+`reasoning_effort: low`. Every LLM call is capped at 2,048 reply tokens.
+
+**Why.** Probe with the gate, no curation (proposed / kept / traps kept):
+greengrid 7→9 / 6→8 / 0; Anthropic 49→56 / 48→55 / 3→2; CoreWeave 42→51 /
+41→51 / 0. 114 calls, 96k prompt + 25k reply tokens (~1,060 per window), no
+failures. Uncapped, `pratt-medium` reasoned 32,768 tokens on one window and
+answered nothing; with thinking disabled it missed Fenwick counsel.
+
+**Consequences.** Entity-count triggers select 85–95% of filing windows (they
+are entity-dense), so a full S-1 costs ~3.8M tokens (Anthropic) / ~1.9M
+(CoreWeave) at one call per window; about two thirds of each prompt is fixed
+overhead (entity and relation lists). Gate claims on gold windows rose
+~1.5–1.8×. Precision outside the gold sets is unmeasured. Off by default.

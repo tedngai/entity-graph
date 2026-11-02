@@ -52,10 +52,33 @@ def _rebase_mention(mention: Mention, chunk: Chunk) -> Mention | None:
     return None
 
 
+def _relation_reader(config: Config):
+    """The LLM relation reader when ``RELATION_READER`` asks for it (D33)."""
+    if config.relation_reader in ("", "off"):
+        return None
+    from .extract.relation_reader import RelationReader
+
+    reader = RelationReader(get_document_profile(config.doc_profile).ontology)
+    if not reader.enabled:
+        log.warning("RELATION_READER=%s but no LLM key; reader off", config.relation_reader)
+        return None
+    return reader
+
+
 def _extract_window(extractor: Extractor, text: str, doc_key: str,
-                    ref: SelfReference | None) -> ExtractionResult:
-    """Extract one window, then copy relations across coordinated lists (D30)."""
-    return expand_coordination(_read_window(extractor, text, doc_key, ref), text)
+                    ref: SelfReference | None, reader=None) -> ExtractionResult:
+    """Extract one window, add the LLM reader's relations among its entities
+    (D33), then copy relations across coordinated lists (D30)."""
+    result = _read_window(extractor, text, doc_key, ref)
+    if reader is not None:
+        read = reader.read(text, result.mentions, ref.short if ref else None,
+                           ref.terms if ref else ())
+        seen = {(r.source_surface, r.target_surface, r.relation, r.evidence)
+                for r in result.relations}
+        extra = [r for r in read
+                 if (r.source_surface, r.target_surface, r.relation, r.evidence) not in seen]
+        result = replace(result, relations=[*result.relations, *extra])
+    return expand_coordination(result, text)
 
 
 def _read_window(extractor: Extractor, text: str, doc_key: str,
@@ -130,8 +153,9 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
         overlap=config.chunk_overlap_sentences,
         max_chars=config.chunk_max_chars,
     )
+    reader = _relation_reader(config)
     if len(chunks) <= 1:
-        return _extract_window(extractor, text, doc_key, ref)
+        return _extract_window(extractor, text, doc_key, ref, reader)
 
     log.info("Chunked %s into %d sentence windows", doc_key or "document", len(chunks))
     profile = get_document_profile(config.doc_profile)
@@ -142,7 +166,7 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
         if profile.skips(chunk.text):
             skipped += 1
             continue
-        result = _extract_window(extractor, chunk.text, doc_key, ref)
+        result = _extract_window(extractor, chunk.text, doc_key, ref, reader)
         for mention in result.mentions:
             rebased = _rebase_mention(mention, chunk)
             if rebased is None:

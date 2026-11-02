@@ -60,6 +60,9 @@ TEXT:
 """
 
 MENTION_CONFIDENCE = 0.6
+# Hard cap on reply tokens. Reasoning models count hidden reasoning here; an
+# uncapped pratt-medium call spent 32,768 tokens reasoning and returned nothing.
+MAX_TOKENS = 2048
 RELATION_CONFIDENCE = 0.6
 
 
@@ -100,12 +103,16 @@ class LlmExtractor:
     name = "llm"
 
     def __init__(self, model: str | None = None, api_key: str | None = None,
-                 url: str | None = None, timeout: float = 60.0) -> None:
+                 url: str | None = None, timeout: float = 60.0,
+                 max_tokens: int = MAX_TOKENS, extra: dict | None = None) -> None:
         config = load_config()
         self.model = model if model is not None else config.llm_model
         self.api_key = api_key if api_key is not None else config.llm_api_key
         self.url = url if url is not None else config.llm_url
         self.timeout = timeout
+        self.last_usage: dict = {}
+        self.max_tokens = max_tokens
+        self.extra = dict(extra or {})
         self.headers = {"Content-Type": "application/json"}
         if config.openrouter_referer:
             self.headers["HTTP-Referer"] = config.openrouter_referer
@@ -125,8 +132,31 @@ class LlmExtractor:
             "model": self.model,
             "messages": messages,
             "temperature": temperature,
+            "max_tokens": self.max_tokens,
             "response_format": {"type": "json_object"},
+            **self.extra,
         }
+        try:
+            body = self._post(payload)
+        except RuntimeError as exc:
+            # Some engines reject JSON mode; the prompt asks for JSON anyway.
+            if "response_format" not in str(exc):
+                raise
+            payload.pop("response_format")
+            body = self._post(payload)
+        self.last_usage = body.get("usage") or {}
+        try:
+            choice = body["choices"][0]
+            content = choice["message"]["content"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise RuntimeError(f"Unexpected LLM response: {body!r}") from exc
+        if not content:
+            raise RuntimeError(
+                f"LLM returned no content (finish_reason={choice.get('finish_reason')!r})"
+            )
+        return content
+
+    def _post(self, payload: dict) -> dict:
         request = urllib.request.Request(
             self.url,
             data=json.dumps(payload).encode("utf-8"),
@@ -135,7 +165,7 @@ class LlmExtractor:
         )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                body = json.loads(response.read().decode("utf-8"))
+                return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = ""
             try:
@@ -147,10 +177,6 @@ class LlmExtractor:
             ) from exc
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             raise RuntimeError(f"LLM call failed: {exc}") from exc
-        try:
-            return body["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise RuntimeError(f"Unexpected LLM response: {body!r}") from exc
 
     def extract(self, text: str, doc_key: str = "") -> ExtractionResult:
         prompt = USER_PROMPT.format(text=text)

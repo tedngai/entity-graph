@@ -1,0 +1,181 @@
+"""LLM relation reader: relations GLiNER found the entities for but not the link (D33).
+
+GLiNER2 tags most entity spans but scores relations pair by pair, so it misses
+what needs the passage read as a whole: "Ernst & Young LLP, independent
+registered public accounting firm", "legal matters will be passed upon for us
+by Fenwick & West LLP", list members with no verb of their own. The reader
+hands an LLM one window, the entity strings GLiNER found there, who "we" is
+(D28) and the profile's closed relation set, and asks which relations the text
+states among those entities. Every answer is checked: both ends must be listed
+entities, the relation must be in the profile and legal for their types, and
+the evidence must be a verbatim quote (else the sentences spanning both ends
+are quoted). The gate judges the result like any other proposal.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+
+from .base import Mention, RelationProposal
+from .gliner_extractor import _evidence_for
+from .llm import LlmExtractor, parse_json_object
+from .ontology import Ontology, RelationSpec, stored_relation
+
+log = logging.getLogger(__name__)
+
+# What each relation means, head -> tail. GLiNER ignores descriptions; an LLM
+# needs the direction spelled out.
+RELATION_MEANINGS: dict[str, str] = {
+    "works_for": "head is employed by, or holds an officer role at, tail",
+    "located_in": "head is located or headquartered in tail",
+    "founded": "head founded or co-founded tail",
+    "leads": "head is the chief executive, president, chair or head of tail "
+             "(including chair of a board committee)",
+    "partnered_with": "head and tail have a partnership or collaboration",
+    "acquired": "head acquired or agreed to acquire tail",
+    "invested_in": "head invested in, or holds equity bought in, tail",
+    "member_of": "head is a member of tail (a board, committee, trust or group)",
+    "subsidiary_of": "head is a subsidiary of, or wholly owned by, tail",
+    "supplies": "head sells or provides goods, services or capacity to tail",
+    "sued": "head filed a lawsuit or claim against tail",
+    "underwriter_of": "head is an underwriter of tail's securities offering",
+    "auditor_of": "head is the independent auditor (registered public accounting firm) of tail",
+    "advisor_to": "head advises tail, including as its legal counsel",
+    "develops": "head develops or makes tail",
+}
+
+SYSTEM_PROMPT = (
+    "You read documents and report the relationships they state. "
+    "Return ONLY a JSON object, with no prose and no code fences."
+)
+
+USER_PROMPT = """\
+{self_reference}Entities found in the text (use these exact strings):
+{entities}
+
+Relations (head -> tail):
+{relations}
+
+List every relation from the list above that the text states as fact between
+two of the listed entities. Skip relations that are only planned, possible,
+hypothetical, negated or your own inference. The head and tail must fit the
+types shown for the relation.
+
+Return JSON: {{"relations": [{{"head": "<entity>", "relation": "<relation name>",
+"tail": "<entity>", "evidence": "<verbatim quote from the text, one or two sentences>"}}]}}
+Return {{"relations": []}} if the text states none.
+
+TEXT:
+{text}
+"""
+
+CONFIDENCE = 0.6
+# pratt-medium is a reasoning model: uncapped it reasoned 32,768 tokens and
+# answered nothing; at "low" it answers in ~1,400 tokens and still finds
+# counsel (with thinking off it did not).
+LLM_OPTIONS = {"reasoning_effort": "low"}
+# Running totals over every reader call in this process (calls, tokens).
+USAGE = {"calls": 0, "failed": 0, "prompt_tokens": 0, "completion_tokens": 0}
+_SPACE = re.compile(r"\s+")
+
+
+def _squash(text: str) -> str:
+    return _SPACE.sub(" ", text).strip()
+
+
+def _locate_quote(text: str, quote: str) -> str | None:
+    """The quote as it appears in ``text`` (whitespace-insensitive), else None."""
+    if not quote:
+        return None
+    if quote in text:
+        return quote
+    words = [re.escape(w) for w in quote.split()]
+    if not words:
+        return None
+    match = re.search(r"\s+".join(words), text)
+    return match.group(0) if match else None
+
+
+class RelationReader:
+    """Ask an LLM for the profile's relations among a window's entities."""
+
+    name = "llm_reader"
+
+    def __init__(self, ontology: Ontology, llm: LlmExtractor | None = None) -> None:
+        self.specs: dict[str, RelationSpec] = {s.name: s for s in ontology.relation_specs}
+        self.labels_for_type: dict[str, set[str]] = {}
+        for label, entity_type in ontology.label_to_type.items():
+            self.labels_for_type.setdefault(entity_type, set()).add(label)
+        self.llm = llm or LlmExtractor(timeout=120, extra=LLM_OPTIONS)
+
+    @property
+    def enabled(self) -> bool:
+        return self.llm.enabled
+
+    def _relation_lines(self) -> str:
+        return "\n".join(
+            f"- {name}: {RELATION_MEANINGS.get(name, name.replace('_', ' '))} "
+            f"[head: {'/'.join(spec.head)}; tail: {'/'.join(spec.tail)}]"
+            for name, spec in self.specs.items()
+        )
+
+    def read(self, text: str, mentions: list[Mention], self_name: str | None = None,
+             self_terms: tuple[str, ...] = ()) -> list[RelationProposal]:
+        """Relations the LLM reads among ``mentions`` in ``text``; [] on any failure."""
+        labels: dict[str, set[str]] = {}
+        for m in mentions:
+            labels.setdefault(m.surface, set()).update(self.labels_for_type.get(m.entity_type, ()))
+        if self_name:
+            labels.setdefault(self_name, set()).add("organization")
+        labels = {s: ls for s, ls in labels.items() if ls}
+        if len(labels) < 2:
+            return []
+        entities = "\n".join(f'- "{s}" ({"/".join(sorted(ls))})' for s, ls in labels.items())
+        self_reference = ""
+        if self_name:
+            terms = ", ".join(f'"{t}"' for t in self_terms) or '"we", "us", "our"'
+            self_reference = (f"In this text {terms} refer to {self_name}; report those "
+                              f'relations with "{self_name}" as the entity.\n\n')
+        prompt = USER_PROMPT.format(self_reference=self_reference, entities=entities,
+                                    relations=self._relation_lines(), text=text)
+        USAGE["calls"] += 1
+        try:
+            content = self.llm._chat([{"role": "system", "content": SYSTEM_PROMPT},
+                                      {"role": "user", "content": prompt}])
+            items = parse_json_object(content).get("relations") or []
+        except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+            USAGE["failed"] += 1
+            log.warning("Relation reader failed on a window: %s", exc)
+            return []
+        finally:
+            for key in ("prompt_tokens", "completion_tokens"):
+                USAGE[key] += int(self.llm.last_usage.get(key) or 0)
+            self.llm.last_usage = {}
+
+        by_fold = {s.casefold(): s for s in labels}
+        proposals: list[RelationProposal] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            head = by_fold.get(str(item.get("head", "")).strip().casefold())
+            tail = by_fold.get(str(item.get("tail", "")).strip().casefold())
+            name = str(item.get("relation", "")).strip().lower().replace(" ", "_")
+            spec = self.specs.get(name)
+            if not (head and tail and spec) or head == tail:
+                continue
+            head_labels = labels[head] & set(spec.head)
+            tail_labels = labels[tail] & set(spec.tail)
+            if not (head_labels and tail_labels):
+                continue
+            evidence = _locate_quote(text, str(item.get("evidence", "")).strip())
+            if evidence is None or not _squash(evidence):
+                evidence = _evidence_for(text, max(text.find(head), 0), max(text.find(tail), 0),
+                                         (head, tail))
+            proposals.append(RelationProposal(
+                source_surface=head, target_surface=tail, relation=stored_relation(name),
+                evidence=evidence, confidence=CONFIDENCE,
+                source_type=sorted(head_labels)[0], target_type=sorted(tail_labels)[0],
+            ))
+        return proposals
