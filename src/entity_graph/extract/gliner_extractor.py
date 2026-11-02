@@ -49,12 +49,16 @@ def _sentence_index(spans: list[tuple[int, int]], position: int) -> int | None:
     return None
 
 
-def _evidence_for(text: str, head_start: int, tail_start: int) -> str:
+def _evidence_for(text: str, head_start: int, tail_start: int,
+                  surfaces: tuple[str, ...] = ()) -> str:
     """Evidence quote spanning the head and tail spans.
 
     The relation is asserted somewhere between the two arguments, so we quote
     from the start of the head's sentence to the end of the tail's sentence
-    rather than just the head's line.
+    rather than just the head's line. The model anchors on the first mention
+    of each argument, so when the next sentence names one of ``surfaces``
+    again it is quoted too: "... is composed of Karen Boone and Glenn
+    Hutchins. Mr. Hutchins is the chair of our compensation committee." (D31)
     """
     spans = split_sentences(text)
     if not spans:
@@ -68,6 +72,10 @@ def _evidence_for(text: str, head_start: int, tail_start: int) -> str:
     if tail_index is None:
         tail_index = head_index
     lo, hi = sorted((head_index, tail_index))
+    if hi + 1 < len(spans):
+        following = text[spans[hi + 1][0]:spans[hi + 1][1]].casefold()
+        if any(s and s.casefold() in following for s in surfaces):
+            hi += 1
     return text[spans[lo][0]:spans[hi][1]].strip()
 
 
@@ -173,7 +181,8 @@ def parse_joint_payload(
                     source_surface=head_mention.surface,
                     target_surface=tail_mention.surface,
                     relation=relation_name,
-                    evidence=_evidence_for(text, head_start, tail_start),
+                    evidence=_evidence_for(text, head_start, tail_start,
+                                           (head_mention.surface, tail_mention.surface)),
                     confidence=_clamp(rel.get("confidence", 0.5)),
                     source_type=head_label,
                     target_type=tail_label,
@@ -333,7 +342,8 @@ class GlinerExtractor:
                         target_surface=target,
                         relation=relation_name,
                         evidence=_evidence_for(
-                            text, int(head.get("start", 0)), int(tail.get("start", 0))
+                            text, int(head.get("start", 0)), int(tail.get("start", 0)),
+                            (source, target),
                         ),
                         confidence=_clamp(item.get("confidence", 0.5)),
                     )

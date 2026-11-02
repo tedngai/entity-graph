@@ -920,3 +920,26 @@ rejected in the earlier full run.
 
 **Consequences.** Lists whose members get no relation at all (the four LTBT
 trustees, "Switch and Chirisa Technology Parks") are not helped.
+
+## D31 — Evidence takes the next sentence when it names an argument again
+**Status:** accepted · **Date:** 2026-11-02
+
+**Context.** JointIE anchors each argument on its first mention, so the
+evidence quote (head sentence through tail sentence) can stop one sentence
+short of the claim: "Our compensation committee is composed of Karen Boone and
+Glenn Hutchins. Mr. Hutchins is the chair of our compensation committee." The
+gate saw only the first sentence and rightly rejected Hutchins LEADS.
+
+**Decision.** `_evidence_for` extends the quote by the following sentence when
+that sentence contains the head or tail surface again (case-insensitive). One
+sentence at most; no pronoun resolution.
+
+**Why.** The full uncurated CoreWeave run (old quotes) rejected both Hutchins
+LEADS committee facts (0.07, 0.15). Gate probe with D31, no curation: CoreWeave
+facts kept 41/42 proposed; Anthropic 48/49 and greengrid 6/7 unchanged; no new
+trap kept. (Anthropic's
+third kept trap, Razavi MEMBER_OF Class T, was proposed since D30 and is
+independent of this change.)
+
+**Consequences.** Some quotes are one sentence longer, so the gate prompt grows
+slightly.

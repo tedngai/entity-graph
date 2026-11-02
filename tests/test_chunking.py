@@ -134,3 +134,14 @@ def test_extract_document_short_text_matches_plain_extractor() -> None:
     assert [(m.surface, m.start, m.end) for m in result.mentions] == [
         (m.surface, m.start, m.end) for m in plain.mentions
     ]
+
+
+def test_evidence_takes_the_next_sentence_when_it_names_an_argument_again() -> None:
+    from entity_graph.extract.gliner_extractor import _evidence_for
+
+    text = ("Our compensation committee is composed of Karen Boone and Glenn Hutchins. "
+            "Mr. Hutchins is the chair of our compensation committee. Fees are paid quarterly.")
+    head, tail = text.index("Glenn Hutchins"), text.index("compensation committee")
+    evidence = _evidence_for(text, head, tail, ("Glenn Hutchins", "compensation committee"))
+    assert evidence.endswith("chair of our compensation committee.")
+    assert _evidence_for(text, head, tail).endswith("Glenn Hutchins.")
