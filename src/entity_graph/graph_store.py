@@ -12,6 +12,7 @@ from datetime import date
 from .config import Config, load_config
 from .db import connect
 from .doc_profiles import get_document_profile
+from .entity_types import entity_types_allow
 from .extract.decide import judge_relations as decide_judge_relations
 from .extract.gate import awaits_verdict, should_promote
 from .extract.base import is_excluded_type
@@ -141,14 +142,17 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
     pending proposal. A refuted claim is marked ``rejected`` instead of being
     promoted. The Jev assertion cutoff is the frozen constant; modality is an
     argmax. A proposal Jev did not answer (a failed call) stays pending for the
-    next build instead of promoting unscored (D22). Returns the number of edges
-    built.
+    next build instead of promoting unscored (D22). A relation the endpoints'
+    majority-vote entity types do not allow is rejected with gate ``entity_type``
+    (D27). Returns the number of edges built.
     """
     config = config or load_config()
     client = SystemOneClient(config) if validate else None
     remote_gate = client is not None and client.enabled
+    specs = get_document_profile(config.doc_profile).ontology.relation_specs
     built = 0
     awaiting = 0
+    type_rejected = 0
     with connect(config) as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -199,6 +203,18 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
             dst_id = entity_for_surface_in_doc(cur, dst, doc_id) or ensure_entity(
                 cur, dst, target_type
             )
+            if not entity_types_allow(
+                relation, _entity_type(cur, src_id), _entity_type(cur, dst_id), specs
+            ):
+                # The proposing mention's type was legal, but the entity's
+                # majority type is not ("Claude" WORKS_FOR: Claude is a PRODUCT).
+                cur.execute(
+                    "UPDATE relation_proposals SET status = 'rejected', validation = %s, "
+                    "modality = %s, gate = 'entity_type' WHERE id = %s",
+                    (assertion, modality, pid),
+                )
+                type_rejected += 1
+                continue
             symmetric = is_symmetric(relation)
             if symmetric and src_id > dst_id:
                 # One undirected edge per pair, whichever surface came first.
@@ -219,6 +235,9 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
                 "modality = %s, gate = %s WHERE id = %s",
                 (assertion, modality, gate, pid),
             )
+    if type_rejected:
+        log.info("Rejected %d proposal(s) the endpoint entity types do not allow",
+                 type_rejected)
     if awaiting:
         log.warning(
             "%d proposal(s) got no gate verdict and stay pending; run build again "
@@ -226,6 +245,37 @@ def build_from_proposals(config: Config | None = None, validate: bool = True) ->
         )
     log.info("Built %d relationships from proposals", built)
     return built
+
+
+def _entity_type(cur, entity_id: int) -> str | None:
+    cur.execute("SELECT entity_type FROM entities WHERE id = %s", (entity_id,))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def retype_entities(config: Config | None = None, *, retire_facts: bool = False,
+                    dry_run: bool = False) -> tuple[list, list]:
+    """Re-vote every entity's type and list the facts the new types forbid.
+
+    For databases resolved before majority-vote typing (D27). With
+    ``retire_facts`` those facts are set ``is_current = false`` (never
+    deleted). Returns ``(type changes, type-illegal facts)``.
+    """
+    from .entity_types import retype_all, type_illegal_facts
+
+    config = config or load_config()
+    specs = get_document_profile(config.doc_profile).ontology.relation_specs
+    with connect(config) as conn, conn.cursor() as cur:
+        changes = retype_all(cur)
+        illegal = type_illegal_facts(cur, specs)
+        if retire_facts and illegal:
+            cur.execute(
+                "UPDATE facts SET is_current = false WHERE id = ANY(%s)",
+                ([row[0] for row in illegal],),
+            )
+        if dry_run:
+            conn.rollback()
+    return changes, illegal
 
 
 def _entity_names(cur, entity_id: int) -> list[str]:

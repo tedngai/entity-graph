@@ -113,6 +113,9 @@ entity-graph eval --from-db            # score against the profile's gold file
 
 See `docs/DECISIONS.md` D26. Facts carry `valid_from` / `valid_to` read from
 their evidence (D25); `entity-graph dates` fills them on older databases.
+An entity's type is the majority of its mentions' types and build checks
+relations against it (D27); `entity-graph retype --retire-facts` applies that
+to a database resolved earlier.
 
 **Gold eval (does not tune thresholds).**
 

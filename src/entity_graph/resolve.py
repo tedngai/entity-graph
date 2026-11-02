@@ -24,6 +24,7 @@ from .chunking import split_sentences
 from .config import Config, load_config
 from .db import connect
 from .defined_terms import DefinedTerm, defined_term_map
+from .entity_types import revote_entity
 from .extract.jev import SystemOneClient, align_pair
 
 log = logging.getLogger(__name__)
@@ -257,6 +258,8 @@ def resolve_unresolved(config: Config | None = None) -> int:
     A mention of a short form its document defines (``Long-Term Benefit Trust
     ("LTBT")``) resolves as the long form, so both surfaces share one entity.
     The definition stays scoped to its document; no alias is written (D24).
+    Each link re-votes the entity's type from its mentions so far, so later
+    alignment calls see the majority type, not the first mention's (D27).
     """
     config = config or load_config()
     client = SystemOneClient(config)
@@ -266,6 +269,7 @@ def resolve_unresolved(config: Config | None = None) -> int:
         log.info("Jev disabled (no API key); using exact/alias/trigram only")
 
     linked = 0
+    retyped = 0
     with connect(config) as conn, conn.cursor() as cur:
         cur.execute(
             "SELECT m.id, m.surface_form, m.entity_type, m.document_id, m.char_start "
@@ -295,6 +299,8 @@ def resolve_unresolved(config: Config | None = None) -> int:
             cur.execute(
                 "UPDATE mentions SET entity_id = %s WHERE id = %s", (entity_id, mention_id)
             )
+            if revote_entity(cur, entity_id) is not None:
+                retyped += 1
             linked += 1
             if index % RESOLVE_COMMIT_EVERY == 0:
                 conn.commit()
@@ -302,6 +308,8 @@ def resolve_unresolved(config: Config | None = None) -> int:
         conn.commit()
     if term_links:
         log.info("Linked %d mention(s) through defined terms", term_links)
+    if retyped:
+        log.info("Majority vote changed an entity type %d time(s)", retyped)
     log.info("Resolved %d mentions", linked)
     return linked
 

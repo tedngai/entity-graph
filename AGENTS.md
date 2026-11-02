@@ -77,6 +77,7 @@ entity-graph curate --file curation.json  # merge duplicates / hide non-actors (
 entity-graph curate --defaults            # hide the document profile's generic non-actors
 entity-graph profiles                     # list document profiles (DOC_PROFILE selects one)
 entity-graph dates                        # date undated facts from their evidence (D25)
+entity-graph retype --retire-facts        # majority-vote entity types; retire facts they forbid (D27)
 entity-graph run --input data/samples     # full pipeline
 entity-graph analyze                      # NetworkX report to stdout
 entity-graph visualize                    # out/graph.html (pyvis)

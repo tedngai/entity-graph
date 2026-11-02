@@ -800,4 +800,40 @@ traps leaked — the baseline to beat.
 RSUs`) that only the gate removes, so a profile is not trusted until its gold
 eval is run end to end. Product typing improves but is not settled: in the
 sample, `Claude` was PRODUCT 15, PERSON 21, ORG 10 times; an entity keeps the
-first type it is created with. `history_book` has no gold file yet.
+first type it is created with (fixed by D27). `history_book` has no gold file yet.
+
+
+## D27 — An entity's type is the majority of its mentions' types
+**Status:** accepted · **Date:** 2026-11-01
+
+**Context.** An entity kept the type of the mention that created it. In the
+S-1 re-run (P9.3) `Claude` had PRODUCT 214, ORG 123 and PERSON 109 mentions
+but was stored PERSON; `Anthropic` had ORG 105 and PRODUCT 5 but was stored
+PRODUCT, so alignment compared it as a product and it never joined
+`Anthropic, PBC`. Build checked a relation only against the proposing
+mention's type, so the 3 of 22 `Claude WORKS_FOR` proposals typed PERSON
+passed and leaked the last gold trap.
+
+**Decision.** `entity_types.py`: `vote_type` takes the plurality of an
+entity's mention types (MISC and empty vote only when nothing else does; a
+tie keeps the current type, else breaks alphabetically). `resolve` re-votes
+the entity after every mention it links, so later Jev alignment calls see the
+majority type. `build` rejects a proposal whose relation the endpoint
+entities' types do not allow (gate `entity_type`); unknown or MISC types never
+block. `entity-graph retype [--retire-facts] [--dry-run]` re-votes an existing
+database and lists, or marks not current, the facts the new types forbid.
+
+**Why.** On `entity_graph_anthropic_s1_v2` (curated): 176 entities change
+type; 117 of 773 current facts are type-illegal under the voted types. A
+sample of 45 was 44 noise (`prospectus LOCATED_IN Dubai`, `Claude WORKS_FOR
+insurance`, `Dario Amodei FOUNDED NEOs`). Retiring them: recall stays 40/60,
+trap leaks 1/7 -> 0/7, current facts 773 -> 656.
+
+**Consequences.** A wrong majority now overrides a right mention: generic
+nouns retype freely (`customers` ORG -> PERSON) and an entity whose mentions
+split across types loses the edges of its minority reading (`Trustees` ORG
+lost `WORKS_FOR Long-Term Benefit Trust`). Re-voting during resolve cannot
+undo an alignment decision taken before the vote turned, so the Anthropic /
+`Anthropic, PBC` split on the existing S-1 database needs a fresh resolve (or
+a curation merge) to disappear. Retired facts stay in `facts` with
+`is_current = false`.

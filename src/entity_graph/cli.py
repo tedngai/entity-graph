@@ -62,6 +62,13 @@ def _parser() -> argparse.ArgumentParser:
 
     sub.add_parser("dates", help="fill fact valid_from/valid_to from evidence (undated facts only)")
 
+    p_retype = sub.add_parser(
+        "retype", help="set each entity's type by majority vote of its mentions (D27)"
+    )
+    p_retype.add_argument("--retire-facts", action="store_true",
+                          help="mark facts the new types forbid as not current")
+    p_retype.add_argument("--dry-run", action="store_true", help="report without writing")
+
     sub.add_parser("analyze", help="NetworkX report (degree, betweenness, communities)")
 
     p_viz = sub.add_parser("visualize", help="interactive HTML graph via pyvis")
@@ -205,6 +212,20 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "dates":
         from .graph_store import backfill_fact_dates
         print(f"Dated {backfill_fact_dates(config)} fact(s) from their evidence")
+
+    elif args.command == "retype":
+        from .graph_store import retype_entities
+        changes, illegal = retype_entities(
+            config, retire_facts=args.retire_facts, dry_run=args.dry_run
+        )
+        verb = "Would retype" if args.dry_run else "Retyped"
+        print(f"{verb} {len(changes)} entit{'y' if len(changes) == 1 else 'ies'}")
+        for _, name, old, new in changes[:40]:
+            print(f"  {name!r}: {old} -> {new}")
+        action = "retired" if args.retire_facts and not args.dry_run else "found"
+        print(f"{len(illegal)} current fact(s) the entity types forbid ({action})")
+        for _, src, relation, dst, src_type, dst_type in illegal[:40]:
+            print(f"  {src} [{src_type}] {relation} {dst} [{dst_type}]")
 
     elif args.command == "analyze":
         from .analyze import analyze_graph, format_report
