@@ -78,6 +78,7 @@ entity-graph curate --defaults            # hide the document profile's generic 
 entity-graph profiles                     # list document profiles (DOC_PROFILE selects one)
 entity-graph dates                        # date undated facts from their evidence (D25)
 entity-graph retype --retire-facts        # majority-vote entity types; retire facts they forbid (D27)
+entity-graph probe --gold g.jsonl --text doc.md [--gate]  # extraction recall on gold windows in minutes (D28)
 entity-graph run --input data/samples     # full pipeline
 entity-graph analyze                      # NetworkX report to stdout
 entity-graph visualize                    # out/graph.html (pyvis)

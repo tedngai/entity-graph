@@ -25,6 +25,7 @@ from .config import Config, load_config
 from .db import connect
 from .defined_terms import DefinedTerm, defined_term_map
 from .entity_types import revote_entity
+from .self_reference import find_self_reference, term_map
 from .extract.jev import SystemOneClient, align_pair
 
 log = logging.getLogger(__name__)
@@ -239,7 +240,8 @@ def ensure_entity(cur, surface: str, entity_type: str | None = None,
 
 
 def _document_terms(cur, document_id: int) -> dict[str, DefinedTerm]:
-    """Defined terms of one document, anchored to its extracted mentions (D24)."""
+    """Defined terms of one document, anchored to its extracted mentions (D24),
+    plus the terms it defines for itself ("we", "the Company"; D28)."""
     cur.execute("SELECT raw_text FROM documents WHERE id = %s", (document_id,))
     row = cur.fetchone()
     if not row or not row[0]:
@@ -249,7 +251,12 @@ def _document_terms(cur, document_id: int) -> dict[str, DefinedTerm]:
         "WHERE document_id = %s",
         (document_id,),
     )
-    return defined_term_map(row[0], cur.fetchall())
+    terms = defined_term_map(row[0], cur.fetchall())
+    ref = find_self_reference(row[0])
+    if ref is not None:
+        for surface, name in term_map(ref).items():
+            terms.setdefault(surface, DefinedTerm(surface, name, "ORG", ref.position))
+    return terms
 
 
 def resolve_unresolved(config: Config | None = None) -> int:

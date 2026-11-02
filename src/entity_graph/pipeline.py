@@ -21,6 +21,7 @@ from .extract.base import (
 from .graph_store import build_from_proposals, record_mention, record_proposal
 from .ingest import ingest_directory
 from .resolve import ensure_entity, resolve_unresolved
+from .self_reference import SelfReference, find_self_reference, rewrite
 
 log = logging.getLogger(__name__)
 
@@ -45,8 +46,59 @@ def _rebase_mention(mention: Mention, chunk: Chunk) -> Mention | None:
     return None
 
 
+def _extract_window(extractor: Extractor, text: str, doc_key: str,
+                    ref: SelfReference | None) -> ExtractionResult:
+    """Extract one window; with a self-reference, also extract the rewritten
+    text, map its mentions and evidence back to the original, and keep both
+    readings (D28). Neither wins everywhere: "our Chief Financial Officer"
+    needs the name, but "our audit committee" read as "CoreWeave's audit
+    committee" pulls the member edge onto the company."""
+    plain = extractor.extract(text, doc_key)
+    if ref is None:
+        return plain
+    rw = rewrite(text, ref)
+    if not rw.edits:
+        return plain
+    result = extractor.extract(rw.text, doc_key)
+    mentions = list(plain.mentions)
+    for mention in result.mentions:
+        start, end = rw.span(mention.start, mention.end)
+        if 0 <= start < end <= len(text):
+            mentions.append(replace(mention, surface=text[start:end], start=start, end=end))
+
+    def original(quote: str) -> str:
+        idx = rw.text.find(quote) if quote else -1
+        if idx < 0:
+            return quote
+        start, end = rw.span(idx, idx + len(quote))
+        return text[start:end]
+
+    relations = list(plain.relations)
+    for proposal in result.relations:
+        # The author keeps its name as the surface, so build resolves it to
+        # the author; other surfaces and the evidence revert to the original.
+        source = proposal.source_surface
+        target = proposal.target_surface
+        relations.append(replace(
+            proposal,
+            source_surface=source if source == ref.short else original(source),
+            target_surface=target if target == ref.short else original(target),
+            evidence=original(proposal.evidence),
+        ))
+    # Both readings find most spans and pairs; keep one of each.
+    unique_mentions = {(m.surface, m.start, m.end, m.entity_type): m for m in mentions}
+    unique_relations = {}
+    for proposal in relations:
+        key = (proposal.source_surface, proposal.target_surface, proposal.relation)
+        prev = unique_relations.get(key)
+        if prev is None or proposal.confidence > prev.confidence:
+            unique_relations[key] = proposal
+    return ExtractionResult(doc_key=result.doc_key, mentions=list(unique_mentions.values()),
+                            relations=list(unique_relations.values()))
+
+
 def extract_document(extractor: Extractor, text: str, doc_key: str,
-                     config: Config) -> ExtractionResult:
+                     config: Config, ref: SelfReference | None = None) -> ExtractionResult:
     """Run the extractor over a document, chunking long texts into windows.
 
     Short documents (a single window) go straight to the extractor. Longer
@@ -54,7 +106,11 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
     profile marks as boilerplate (D26), and the results merged: mention
     offsets are rebased to the full document and overlap-induced duplicates are
     collapsed (mentions by span, relations by (source, target, relation)).
+    When the document defines who "we" is, each window is extracted with
+    those terms replaced by the author's name (D28); pass ``ref`` to use a
+    definition found elsewhere in the document.
     """
+    ref = ref or find_self_reference(text)
     chunks = chunk_text(
         text,
         max_sentences=config.chunk_max_sentences,
@@ -62,7 +118,7 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
         max_chars=config.chunk_max_chars,
     )
     if len(chunks) <= 1:
-        return extractor.extract(text, doc_key)
+        return _extract_window(extractor, text, doc_key, ref)
 
     log.info("Chunked %s into %d sentence windows", doc_key or "document", len(chunks))
     profile = get_document_profile(config.doc_profile)
@@ -73,7 +129,7 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
         if profile.skips(chunk.text):
             skipped += 1
             continue
-        result = extractor.extract(chunk.text, doc_key)
+        result = _extract_window(extractor, chunk.text, doc_key, ref)
         for mention in result.mentions:
             rebased = _rebase_mention(mention, chunk)
             if rebased is None:

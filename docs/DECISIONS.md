@@ -837,3 +837,65 @@ undo an alignment decision taken before the vote turned, so the Anthropic /
 `Anthropic, PBC` split on the existing S-1 database needs a fresh resolve (or
 a curation merge) to disappear. Retired facts stay in `facts` with
 `is_current = false`.
+
+## D28 — A document's "we" is extracted as the entity it defines
+**Status:** accepted · **Date:** 2026-11-01
+
+**Context.** A held-out S-1 (CoreWeave, P9.6) scored 23/54 against 40/60 on
+the Anthropic S-1 the `sec_filing` profile was built on. Nearly every miss had
+the registrant on one side and died at extraction: the filing says "Nitin
+Agrawal has served as our Chief Financial Officer", and GLiNER2.5 tagged 543
+of about 6,500 "our"/"we"/"us" as an organization, so no relation was ever
+proposed. Hand-curated merges (we/us/company → registrant) fix none of this:
+they cannot merge a proposal that does not exist.
+
+**Decision.** `self_reference.py` reads the definition corporate documents
+give their author (`the terms "CoreWeave," the "Company," "we," "us," and
+"our" refer to CoreWeave, Inc.`). When a document has one, each window is
+extracted twice: as written, and with the defined terms replaced by the
+author's name ("our company" → the name, "our" → "Name's", "we"/"us" → the
+name, "the Company" when defined). Mentions and evidence of the rewritten
+reading are mapped back to the original offsets and text, so provenance stays
+verbatim; the two readings are unioned. Resolution maps the defined terms to
+the author through the D24 term map, so "we", "our" and "the Company" become
+one entity with no curation. A document without such a definition is
+untouched (in a memoir "we" is the writer, not a party). `entity-graph probe`
+measures proposal recall on the windows holding gold evidence in minutes,
+with `--gate` to send the matching proposals to the relation gate.
+
+**Why.** Probe proposal recall, no curation (greengrid / Anthropic / CoreWeave):
+7/9, 36/60, 22/54 before; rewrite only 7/9, 31/60, 34/54 ("our audit
+committee" read as "Anthropic's audit committee" pulls member edges onto the
+company); union 7/9, 42/60, 39/54; plus "our company" → name 7/9, 45/60,
+39/54. pratt-d3 keeps 48/49 and 38/40 of the matched true proposals with the
+evidence in the document's own words; telling it who "we" is (a claim
+`context` note) changed nothing (47/49, 38/40) and was dropped.
+
+**Consequences.** Windows with a defined term are extracted twice (about
+twice the extraction time on a filing). More traps are proposed (Anthropic
+2, CoreWeave 2 in the probe); the gate and the D27 type check must reject
+them. A testimonial quoted in the document ("transformative for our
+infrastructure") is read as the author's.
+
+## D29 — The relation label the model reads can differ from the stored name
+**Status:** accepted · **Date:** 2026-11-01
+
+**Context.** Two S-1s name ten suppliers; `SUPPLIES` was proposed 1 and 9
+times. On the sentence "Anthropic purchases compute capacity from Fluidstack,
+Lambda and Nscale, and GPUs from AMD" JointIE emitted `partnered_with` and
+`subsidiary_of`, never `supplies`. JointIE accepts a relation description but
+ignores it: output was identical with and without one.
+
+**Decision.** `ontology.RELATION_LABELS` maps a stored relation name to the
+phrase JointIE is asked for; the extractor maps the answer back to the stored
+name. Only `supplies` → "sells to" (same head → tail direction) is set.
+
+**Why.** On five supplier/customer sentences "sells to" found 4 of 5 pairs in
+the right direction ("supplier of" 2, "provides services to" 4 with noise).
+Probe: Anthropic 45/60 → 49/60 (AMD, Fluidstack, Lambda, Nscale), CoreWeave
+39/54 → 40/54, greengrid unchanged. Writing every label in plain words
+("works for") lost one fact; "underwrites" / "audits" / "legal counsel to"
+lost one; neither was kept.
+
+**Consequences.** A label is chosen by measurement, not wording taste; add
+one only with a probe result on every gold set.

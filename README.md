@@ -116,6 +116,11 @@ their evidence (D25); `entity-graph dates` fills them on older databases.
 An entity's type is the majority of its mentions' types and build checks
 relations against it (D27); `entity-graph retype --retire-facts` applies that
 to a database resolved earlier.
+When a document defines who "we" is (`the terms "CoreWeave," "we," "us," and
+"our" refer to CoreWeave, Inc.`), extraction also reads each window with those
+terms replaced by the name, and resolution links them to it (D28). `entity-graph
+probe --gold g.jsonl --text doc.md` measures extraction recall on the windows
+that hold gold evidence in minutes, without a database.
 
 **Gold eval (does not tune thresholds).**
 

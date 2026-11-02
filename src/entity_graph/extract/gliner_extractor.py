@@ -28,6 +28,7 @@ from .ontology import (
     Ontology,
     canonical_pair,
     relation_kwargs,
+    relation_label,
     stored_relation,
 )
 
@@ -92,7 +93,7 @@ def build_joint_schema(joint, ontology: Ontology = GENERAL.ontology):
     """Compile an ontology into a JointIE schema. Reuse the result."""
     schema = joint.create_schema().entities(dict(ontology.entity_descriptions))
     for spec in ontology.relation_specs:
-        schema = schema.relation(spec.name, **relation_kwargs(spec))
+        schema = schema.relation(relation_label(spec.name), **relation_kwargs(spec))
     if "no_self_loops" in SCHEMA_STEPS:
         schema = schema.no_self_loops()
     return schema
@@ -110,6 +111,7 @@ def parse_joint_payload(
     feasible: bool = True,
     doc_key: str = "",
     label_to_type: dict[str, str] | None = None,
+    relation_names: dict[str, str] | None = None,
 ) -> ExtractionResult:
     """Turn a JointIE ``to_dict()`` payload into the extraction contract.
 
@@ -159,7 +161,8 @@ def parse_joint_payload(
             tail_mention, tail_label, tail_start = tail
             if head_mention.surface == tail_mention.surface:
                 continue
-            relation_name = stored_relation(str(rel.get("type") or ""))
+            label = str(rel.get("type") or "")
+            relation_name = stored_relation((relation_names or {}).get(label, label))
             if not relation_name:
                 continue
             if canonical_pair(relation_name, head_mention.surface, tail_mention.surface):
@@ -271,6 +274,10 @@ class GlinerExtractor:
             parsed = parse_joint_payload(
                 payload, text, feasible=feasible, doc_key=doc_key,
                 label_to_type=self.ontology.label_to_type,
+                relation_names={
+                    relation_label(spec.name): spec.name
+                    for spec in self.ontology.relation_specs
+                },
             )
         else:
             parsed = self._extract_independent(text, doc_key)

@@ -62,6 +62,15 @@ def _parser() -> argparse.ArgumentParser:
 
     sub.add_parser("dates", help="fill fact valid_from/valid_to from evidence (undated facts only)")
 
+    p_probe = sub.add_parser(
+        "probe", help="fast extraction recall on the windows holding gold evidence (no DB)"
+    )
+    p_probe.add_argument("--gold", required=True, help="JSONL gold facts")
+    p_probe.add_argument("--text", required=True, help="the document the gold file quotes")
+    p_probe.add_argument("--gate", action="store_true",
+                         help="also send gold-matching proposals to the relation gate")
+    p_probe.add_argument("-v", "--verbose", action="store_true", help="list every gold fact")
+
     p_retype = sub.add_parser(
         "retype", help="set each entity's type by majority vote of its mentions (D27)"
     )
@@ -212,6 +221,16 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "dates":
         from .graph_store import backfill_fact_dates
         print(f"Dated {backfill_fact_dates(config)} fact(s) from their evidence")
+
+    elif args.command == "probe":
+        from .extract.base import get_extractor
+        from .probe import format_probe, gate_probe, probe
+        extractor = get_extractor(config.extraction_backend, config)
+        text = Path(args.text).read_text(encoding="utf-8")
+        result = probe(args.gold, text, config, extractor)
+        print(format_probe(result, verbose=args.verbose))
+        if args.gate:
+            print(gate_probe(result, config))
 
     elif args.command == "retype":
         from .graph_store import retype_entities

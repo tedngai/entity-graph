@@ -106,6 +106,22 @@ class Ontology:
 SCHEMA_STEPS: tuple[str, ...] = ("entities", "relations", "no_self_loops")
 
 
+# The phrase JointIE reads for a relation, when it differs from the stored
+# name. Only the label reaches the model (relation descriptions are accepted
+# but ignored: identical output with and without them), and the name matters:
+# "supplies" was never emitted, even for "Anthropic purchases compute capacity
+# from Fluidstack", while "sells to" finds the supplier with the same head ->
+# tail direction. Keyed by relation name so every profile shares one wording.
+RELATION_LABELS: dict[str, str] = {
+    "supplies": "sells to",
+}
+
+
+def relation_label(name: str) -> str:
+    """The label JointIE is asked for this stored relation name."""
+    return RELATION_LABELS.get(name, name)
+
+
 def relation_kwargs(spec: RelationSpec) -> dict:
     """Keyword arguments for ``JointSchema.relation``, minus the name.
 
