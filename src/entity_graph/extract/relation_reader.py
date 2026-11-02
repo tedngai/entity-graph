@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 
 from .base import Mention, RelationProposal
 from .gliner_extractor import _evidence_for
@@ -78,6 +79,7 @@ CONFIDENCE = 0.6
 LLM_OPTIONS = {"reasoning_effort": "low"}
 # Running totals over every reader call in this process (calls, tokens).
 USAGE = {"calls": 0, "failed": 0, "prompt_tokens": 0, "completion_tokens": 0}
+_USAGE_LOCK = threading.Lock()
 _SPACE = re.compile(r"\s+")
 
 
@@ -96,6 +98,14 @@ def _locate_quote(text: str, quote: str) -> str | None:
         return None
     match = re.search(r"\s+".join(words), text)
     return match.group(0) if match else None
+
+
+def _count(usage: dict, failed: bool = False) -> None:
+    with _USAGE_LOCK:
+        USAGE["calls"] += 1
+        USAGE["failed"] += int(failed)
+        for key in ("prompt_tokens", "completion_tokens"):
+            USAGE[key] += int(usage.get(key) or 0)
 
 
 class RelationReader:
@@ -140,19 +150,17 @@ class RelationReader:
                               f'relations with "{self_name}" as the entity.\n\n')
         prompt = USER_PROMPT.format(self_reference=self_reference, entities=entities,
                                     relations=self._relation_lines(), text=text)
-        USAGE["calls"] += 1
+        usage: dict = {}
         try:
-            content = self.llm._chat([{"role": "system", "content": SYSTEM_PROMPT},
-                                      {"role": "user", "content": prompt}])
+            content, usage = self.llm._chat_full(
+                [{"role": "system", "content": SYSTEM_PROMPT},
+                 {"role": "user", "content": prompt}])
             items = parse_json_object(content).get("relations") or []
         except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
-            USAGE["failed"] += 1
+            _count(usage, failed=True)
             log.warning("Relation reader failed on a window: %s", exc)
             return []
-        finally:
-            for key in ("prompt_tokens", "completion_tokens"):
-                USAGE[key] += int(self.llm.last_usage.get(key) or 0)
-            self.llm.last_usage = {}
+        _count(usage)
 
         by_fold = {s.casefold(): s for s in labels}
         proposals: list[RelationProposal] = []

@@ -21,10 +21,9 @@ class FakeLlm:
         self.last_usage: dict = {}
         self.prompts: list[str] = []
 
-    def _chat(self, messages, temperature=0.0):
+    def _chat_full(self, messages, temperature=0.0):
         self.prompts.append(messages[-1]["content"])
-        self.last_usage = {"prompt_tokens": 10, "completion_tokens": 5}
-        return self.reply
+        return self.reply, {"prompt_tokens": 10, "completion_tokens": 5}
 
 
 def _mention(surface: str, entity_type: str = "ORG") -> Mention:

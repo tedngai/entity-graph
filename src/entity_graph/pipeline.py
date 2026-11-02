@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from pathlib import Path
 
@@ -30,6 +31,8 @@ log = logging.getLogger(__name__)
 # The extractor's most confident window is not always the one that states
 # the claim, and the gate judges each quote on its own (D32).
 EVIDENCE_PER_RELATION = 3
+# Reader calls in flight while GLiNER reads the next windows (D33).
+READER_WORKERS = 4
 
 
 def _rebase_mention(mention: Mention, chunk: Chunk) -> Mention | None:
@@ -71,14 +74,23 @@ def _extract_window(extractor: Extractor, text: str, doc_key: str,
     (D33), then copy relations across coordinated lists (D30)."""
     result = _read_window(extractor, text, doc_key, ref)
     if reader is not None:
-        read = reader.read(text, result.mentions, ref.short if ref else None,
-                           ref.terms if ref else ())
-        seen = {(r.source_surface, r.target_surface, r.relation, r.evidence)
-                for r in result.relations}
-        extra = [r for r in read
-                 if (r.source_surface, r.target_surface, r.relation, r.evidence) not in seen]
-        result = replace(result, relations=[*result.relations, *extra])
+        result = _add_read(result, _read_relations(reader, text, result, ref))
     return expand_coordination(result, text)
+
+
+def _read_relations(reader, text: str, result: ExtractionResult,
+                    ref: SelfReference | None) -> list[RelationProposal]:
+    return reader.read(text, result.mentions, ref.short if ref else None,
+                       ref.terms if ref else ())
+
+
+def _add_read(result: ExtractionResult, read: list[RelationProposal]) -> ExtractionResult:
+    """GLiNER's relations plus the reader's, one per (source, target, relation, quote)."""
+    seen = {(r.source_surface, r.target_surface, r.relation, r.evidence)
+            for r in result.relations}
+    extra = [r for r in read
+             if (r.source_surface, r.target_surface, r.relation, r.evidence) not in seen]
+    return replace(result, relations=[*result.relations, *extra])
 
 
 def _read_window(extractor: Extractor, text: str, doc_key: str,
@@ -162,11 +174,24 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
     mentions: dict[tuple, Mention] = {}
     relations: dict[tuple, dict[str, RelationProposal]] = {}
     skipped = 0
+    windows = []
+    pool = ThreadPoolExecutor(READER_WORKERS) if reader is not None else None
     for chunk in chunks:
         if profile.skips(chunk.text):
             skipped += 1
             continue
-        result = _extract_window(extractor, chunk.text, doc_key, ref, reader)
+        result = _read_window(extractor, chunk.text, doc_key, ref)
+        future = pool.submit(_read_relations, reader, chunk.text, result, ref) if pool else None
+        windows.append((chunk, result, future))
+    if pool is not None:
+        pool.shutdown(wait=True)
+        from .extract.relation_reader import USAGE
+
+        log.info("Relation reader totals so far: %s", USAGE)
+    for chunk, result, future in windows:
+        if future is not None:
+            result = _add_read(result, future.result())
+        result = expand_coordination(result, chunk.text)
         for mention in result.mentions:
             rebased = _rebase_mention(mention, chunk)
             if rebased is None:

@@ -124,6 +124,12 @@ class LlmExtractor:
         return bool(self.api_key)
 
     def _chat(self, messages: list[dict], temperature: float = 0.0) -> str:
+        content, self.last_usage = self._chat_full(messages, temperature)
+        return content
+
+    def _chat_full(self, messages: list[dict],
+                   temperature: float = 0.0) -> tuple[str, dict]:
+        """Reply content and token usage; safe to call from several threads."""
         if not self.enabled:
             raise RuntimeError(
                 "No LLM API key. Set LLM_API_KEY or OPENROUTER_API_KEY."
@@ -144,7 +150,7 @@ class LlmExtractor:
                 raise
             payload.pop("response_format")
             body = self._post(payload)
-        self.last_usage = body.get("usage") or {}
+        usage = body.get("usage") or {}
         try:
             choice = body["choices"][0]
             content = choice["message"]["content"]
@@ -154,7 +160,7 @@ class LlmExtractor:
             raise RuntimeError(
                 f"LLM returned no content (finish_reason={choice.get('finish_reason')!r})"
             )
-        return content
+        return content, usage
 
     def _post(self, payload: dict) -> dict:
         request = urllib.request.Request(

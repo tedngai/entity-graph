@@ -170,3 +170,19 @@ def test_extract_document_keeps_distinct_evidence_per_relation() -> None:
     assert len(result.relations) == EVIDENCE_PER_RELATION
     assert result.relations[0].evidence.startswith("Acme agreed to a lock-up")
     assert any("underwriter for Beta" in r.evidence for r in result.relations)
+
+
+def test_extract_document_adds_reader_relations_on_every_window(monkeypatch) -> None:
+    from entity_graph import pipeline
+    from entity_graph.extract.base import RelationProposal
+
+    class Reader:
+        def read(self, text, mentions, self_name=None, self_terms=()):
+            return [RelationProposal("Reader", text.split()[0], "ADVISOR_TO", text.strip(), 0.6)]
+
+    monkeypatch.setattr(pipeline, "_relation_reader", lambda config: Reader())
+    text = " ".join(f"Alpha{i} Beta{i} met Gamma{i}." for i in range(8))
+    config = Config(chunk_max_sentences=2, chunk_overlap_sentences=0, chunk_max_chars=10_000)
+    result = extract_document(BaselineExtractor(), text, "doc", config)
+    targets = {r.target_surface for r in result.relations if r.source_surface == "Reader"}
+    assert targets == {f"Alpha{i}" for i in range(0, 8, 2)}
