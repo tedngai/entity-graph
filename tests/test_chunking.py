@@ -123,7 +123,8 @@ def test_extract_document_dedupes_overlap() -> None:
 
     mention_keys = [(m.surface, m.start, m.end) for m in result.mentions]
     assert len(mention_keys) == len(set(mention_keys))
-    relation_keys = [(r.source_surface, r.target_surface, r.relation) for r in result.relations]
+    relation_keys = [(r.source_surface, r.target_surface, r.relation, r.evidence)
+                     for r in result.relations]
     assert len(relation_keys) == len(set(relation_keys))
 
 
@@ -145,3 +146,27 @@ def test_evidence_takes_the_next_sentence_when_it_names_an_argument_again() -> N
     evidence = _evidence_for(text, head, tail, ("Glenn Hutchins", "compensation committee"))
     assert evidence.endswith("chair of our compensation committee.")
     assert _evidence_for(text, head, tail).endswith("Glenn Hutchins.")
+
+
+def test_extract_document_keeps_distinct_evidence_per_relation() -> None:
+    from entity_graph.extract.base import ExtractionResult, RelationProposal
+    from entity_graph.pipeline import EVIDENCE_PER_RELATION
+
+    class Repeating:
+        """Proposes Acme UNDERWRITER_OF Beta in every window, quoting the window."""
+
+        name = "repeating"
+
+        def extract(self, text, doc_key=""):
+            confidence = 0.9 if "lock-up" in text else 0.5
+            return ExtractionResult(doc_key, [], [RelationProposal(
+                "Acme", "Beta", "UNDERWRITER_OF", text.strip(), confidence)])
+
+    sentences = ["Acme agreed to a lock-up with Beta.", "Acme is an underwriter for Beta."]
+    sentences += [f"Acme and Beta filler {i}." for i in range(6)]
+    config = Config(chunk_max_sentences=1, chunk_overlap_sentences=0, chunk_max_chars=10_000)
+    result = extract_document(Repeating(), " ".join(sentences), "doc", config)
+
+    assert len(result.relations) == EVIDENCE_PER_RELATION
+    assert result.relations[0].evidence.startswith("Acme agreed to a lock-up")
+    assert any("underwriter for Beta" in r.evidence for r in result.relations)

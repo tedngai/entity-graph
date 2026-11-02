@@ -943,3 +943,24 @@ independent of this change.)
 
 **Consequences.** Some quotes are one sentence longer, so the gate prompt grows
 slightly.
+
+## D32 — Keep up to three evidence quotes per relation across windows
+**Status:** accepted · **Date:** 2026-11-02
+
+**Context.** `extract_document` collapsed proposals with the same (source,
+target, relation) across windows to the single most confident one. The
+extractor's confidence is about the pair, not about the quote: in the uncurated
+Anthropic run, Goldman Sachs and Morgan Stanley UNDERWRITER_OF Anthropic kept a
+lock-up paragraph as evidence and the gate rejected it (0.32, 0.27); the window
+saying they "are acting as representatives of the underwriters" was dropped
+before the gate saw it.
+
+**Decision.** Keep up to `EVIDENCE_PER_RELATION = 3` distinct evidence quotes
+per key, most confident first. Build already judges and promotes each proposal
+on its own, so a key is promoted when any of its quotes passes.
+
+**Why.** The probe extracts each gold window alone and cannot show this;
+measured on full uncurated runs (P9.7).
+
+**Consequences.** More gate calls for relations repeated across windows (at
+most 3× per key).

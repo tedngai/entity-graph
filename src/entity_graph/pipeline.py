@@ -26,6 +26,11 @@ from .self_reference import SelfReference, find_self_reference, rewrite
 
 log = logging.getLogger(__name__)
 
+# Distinct evidence quotes kept per (source, target, relation) across windows.
+# The extractor's most confident window is not always the one that states
+# the claim, and the gate judges each quote on its own (D32).
+EVIDENCE_PER_RELATION = 3
+
 
 def _rebase_mention(mention: Mention, chunk: Chunk) -> Mention | None:
     """Translate a chunk-relative mention into document coordinates.
@@ -112,7 +117,8 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
     documents are extracted window by window, skipping windows the document
     profile marks as boilerplate (D26), and the results merged: mention
     offsets are rebased to the full document and overlap-induced duplicates are
-    collapsed (mentions by span, relations by (source, target, relation)).
+    collapsed (mentions by span; relations by (source, target, relation), keeping
+    up to ``EVIDENCE_PER_RELATION`` distinct evidence quotes, D32).
     When the document defines who "we" is, each window is extracted with
     those terms replaced by the author's name (D28); pass ``ref`` to use a
     definition found elsewhere in the document.
@@ -130,7 +136,7 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
     log.info("Chunked %s into %d sentence windows", doc_key or "document", len(chunks))
     profile = get_document_profile(config.doc_profile)
     mentions: dict[tuple, Mention] = {}
-    relations: dict[tuple, RelationProposal] = {}
+    relations: dict[tuple, dict[str, RelationProposal]] = {}
     skipped = 0
     for chunk in chunks:
         if profile.skips(chunk.text):
@@ -148,17 +154,19 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
                 mentions[key] = rebased
         for proposal in result.relations:
             key = (proposal.source_surface, proposal.target_surface, proposal.relation)
-            prev = relations.get(key)
+            quotes = relations.setdefault(key, {})
+            prev = quotes.get(proposal.evidence)
             if prev is None or proposal.confidence > prev.confidence:
-                relations[key] = proposal
+                quotes[proposal.evidence] = proposal
 
     if skipped:
         log.info("Skipped %d boilerplate window(s) (profile %s)", skipped, profile.name)
-    return ExtractionResult(
-        doc_key=doc_key,
-        mentions=list(mentions.values()),
-        relations=list(relations.values()),
-    )
+    kept = [
+        proposal
+        for quotes in relations.values()
+        for proposal in sorted(quotes.values(), key=lambda p: -p.confidence)[:EVIDENCE_PER_RELATION]
+    ]
+    return ExtractionResult(doc_key=doc_key, mentions=list(mentions.values()), relations=kept)
 
 
 def filter_extraction(result: ExtractionResult, exclude: frozenset[str] | set[str]) -> ExtractionResult:
