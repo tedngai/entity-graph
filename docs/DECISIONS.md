@@ -960,7 +960,10 @@ per key, most confident first. Build already judges and promotes each proposal
 on its own, so a key is promoted when any of its quotes passes.
 
 **Why.** The probe extracts each gold window alone and cannot show this;
-measured on full uncurated runs (P9.7).
+measured on full uncurated runs (P9.7). With D31, uncurated end to end:
+Anthropic 48→50/60 (`entity_graph_anthropic_s1_v5`, 1 trap leak, unchanged),
+CoreWeave 44→46/54 (`entity_graph_coreweave_s1_v4`, 0 leaks). Promoted edges
+1,617 and 1,110.
 
 **Consequences.** More gate calls for relations repeated across windows (at
 most 3× per key).
@@ -989,6 +992,15 @@ greengrid 7→9 / 6→8 / 0; Anthropic 49→56 / 48→55 / 3→2; CoreWeave 42�
 41→51 / 0. 114 calls, 96k prompt + 25k reply tokens (~1,060 per window), no
 failures. Uncapped, `pratt-medium` reasoned 32,768 tokens on one window and
 answered nothing; with thinking disabled it missed Fenwick counsel.
+
+Full uncurated runs, D31+D32 without → with the reader: Anthropic 50→55/60
+(`entity_graph_anthropic_s1_v6`; trap leaks 1→2), CoreWeave 46→51/54
+(`entity_graph_coreweave_s1_v5`; 0 leaks). Promoted edges 1,617→2,106 and
+1,110→1,485 (+30–34%). Reader cost: Anthropic 3,511 calls, 2.83M prompt +
+0.21M reply tokens, 2 failed; CoreWeave 1,762 calls, 1.58M + 0.11M, 0 failed.
+Still missed: three LTBT trustees and Nscale SUPPLIES (Anthropic), Pure and
+Vast PARTNERED_WITH (CoreWeave). Extraction with the reader took ~2h20m per
+filing (4 workers, both filings at once) against ~2h without.
 
 **Consequences.** Entity-count triggers select 85–95% of filing windows (they
 are entity-dense), so a full S-1 costs ~3.8M tokens (Anthropic) / ~1.9M
