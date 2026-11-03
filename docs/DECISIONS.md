@@ -1024,3 +1024,55 @@ are entity-dense), so a full S-1 costs ~3.8M tokens (Anthropic) / ~1.9M
 (CoreWeave) at one call per window; about two thirds of each prompt is fixed
 overhead (entity and relation lists). Gate claims on gold windows rose
 ~1.5–1.8×. Precision outside the gold sets is unmeasured. Off by default.
+
+## D34 — An LLM-only extraction backend (`llm_ie`), trialled against GLiNER and the hybrid
+
+**Context.** The D33 audit found GLiNER's promoted edges outside gold ~15%
+correct (mostly generic endpoints) and the reader's 75%, but the reader only
+links entities GLiNER found, so an LLM had never been tested on its own.
+
+**Decision.** `EXTRACTION_BACKEND=llm_ie` (`extract/llm_ie.py`): one call per
+window (`pratt-medium`, low reasoning) returns entities and relations. It gets
+the profile's entity types and relations, who "we" is, and a rule: specific
+named entities only, no generic nouns or roles, except the registrant's own
+board and committees. Entities must be found verbatim (offsets kept);
+relations pass the reader's checks; facts carry extractor `llm_ie`. Windows
+run in the pipeline's 4-worker pool; GLiNER is not loaded. Gate calls now wait
+`SYSTEMONE_TIMEOUT` (default 120 s): the router queues requests under load,
+and at 20 s the D33 Anthropic build dropped 261 queued batches.
+
+**Why (trial, uncurated, same windows and gate).** Gold-window probe, proposed
+/ kept: greengrid 8/7, Anthropic 51/50, CoreWeave 50/49; traps proposed 0
+(hybrid 5); gate claims less than half the hybrid's. Full runs
+(`entity_graph_coreweave_s1_v6`, `entity_graph_anthropic_s1_v7`):
+
+| | GLiNER | Hybrid (D33) | LLM-only |
+|---|---|---|---|
+| CoreWeave gold | 46/54 | 51/54 | 51/54 |
+| Anthropic gold | 50/60 | 55/60 | 49/60 |
+| Promoted edges (CW / An) | 612 / 858 | 753 / 1,024 | 299 / 315 |
+| Non-gold edges correct, strict (lenient) | ~15% | ~15% + reader 75% | CW 68% (83%), An 68% (95%) |
+| LLM tokens (both filings) | 0 | 4.4M | 5.5M |
+| Wall time per filing | ~3.5 h | ~5.5 h | 20–30 min |
+
+Audit: 40 seeded random non-gold edges per filing, judged by hand; strict =
+relation stated between two named entities, right direction; lenient adds
+defensible readings (lender as SUPPLIES, trustee or manager as MEMBER_OF).
+Generic endpoints: 3 of 80 (GLiNER 34 of 60). `trap_leaks` in `eval` counts
+facts, so one trap edge with three quotes (D32) reports 3; the only trap edge
+that leaks in any design is LTBT SUBSIDIARY_OF Anthropic.
+
+Anthropic misses: the three other LTBT trustees (missed by every design), the
+four Public Benefit Fund managers proposed as MEMBER_OF where gold has LEADS,
+Amazon INVESTED_IN promoted under "Amazon Web Services" (resolution merged
+Amazon into AWS), Google INVESTED_IN under "Google LLC" (not a gold alias; the
+hybrid misses it the same way), SpaceXAI SUPPLIES and Bartz SUED (gate 0.42,
+0.48).
+
+**Consequences.** The rule fixed before the trial (recall within 2 of the
+hybrid on both filings and ≥75% precision) is not met: Anthropic is 6 behind
+and strict precision is 68%. The hybrid stays the recommended configuration.
+The LLM-only graph is far cleaner (whole-graph precision roughly 75–95%
+against ~25–35% for the hybrid, whose GLiNER edges the rule did not weigh)
+and 10× faster at similar token cost; the Anthropic gap is concentrated in
+relation choice for managers and one resolution merge. Off by default.
