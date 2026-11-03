@@ -95,13 +95,13 @@ class AlignmentVerdict:
 class SystemOneClient:
     """Minimal HTTP client for POST /v1/systemone (stdlib only)."""
 
-    def __init__(self, config: Config | None = None, timeout: float = 20.0,
+    def __init__(self, config: Config | None = None, timeout: float | None = None,
                  retries: int = 2) -> None:
         cfg = config or load_config()
         self.url = cfg.systemone_url
         self.api_key = cfg.systemone_api_key
         self.model = cfg.systemone_model
-        self.timeout = timeout
+        self.timeout = timeout if timeout is not None else cfg.systemone_timeout
         # Transient network failures (a dropped connection, a 5xx) are retried
         # this many times before surfacing as SystemOneError, which callers
         # treat as "unavailable" and degrade past.

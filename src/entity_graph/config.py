@@ -79,6 +79,9 @@ class Config:
     # the Jev-verified default wording; "clef" selects the calibrated local-model
     # wording (doer/receiver assertion, tense cues, one claim per request).
     systemone_profile: str = ""
+    # Seconds to wait for one gate call. The Pratt router queues requests under
+    # load; at 20s queued judgments were dropped as unavailable (261 batches).
+    systemone_timeout: float = 120.0
     # Optional OpenRouter attribution headers (sent only when non-empty).
     openrouter_referer: str = ""
     openrouter_title: str = "entity-graph"
@@ -167,6 +170,7 @@ def load_config() -> Config:
         systemone_api_key=env("SYSTEMONE_API_KEY", "") or jev_key_default,
         systemone_model=env("SYSTEMONE_MODEL", jev_model_default),
         systemone_profile=env("SYSTEMONE_PROFILE", profile.systemone_profile),
+        systemone_timeout=float(env("SYSTEMONE_TIMEOUT", "120")),
         openrouter_referer=env("OPENROUTER_REFERER", ""),
         openrouter_title=env("OPENROUTER_TITLE", "entity-graph"),
         schema_path=Path(env("SCHEMA_PATH", "db/schema.sql")),

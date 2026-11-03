@@ -131,6 +131,29 @@ class RelationReader:
             for name, spec in self.specs.items()
         )
 
+    @staticmethod
+    def _self_reference(self_name: str | None, self_terms: tuple[str, ...]) -> str:
+        if not self_name:
+            return ""
+        terms = ", ".join(f'"{t}"' for t in self_terms) or '"we", "us", "our"'
+        return (f"In this text {terms} refer to {self_name}; report those "
+                f'relations with "{self_name}" as the entity.\n\n')
+
+    def _ask(self, prompt: str) -> dict | None:
+        """One LLM call, parsed; None (and counted as failed) on any failure."""
+        usage: dict = {}
+        try:
+            content, usage = self.llm._chat_full(
+                [{"role": "system", "content": SYSTEM_PROMPT},
+                 {"role": "user", "content": prompt}])
+            data = parse_json_object(content)
+        except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
+            _count(usage, failed=True)
+            log.warning("%s failed on a window: %s", self.name, exc)
+            return None
+        _count(usage)
+        return data
+
     def read(self, text: str, mentions: list[Mention], self_name: str | None = None,
              self_terms: tuple[str, ...] = ()) -> list[RelationProposal]:
         """Relations the LLM reads among ``mentions`` in ``text``; [] on any failure."""
@@ -143,25 +166,15 @@ class RelationReader:
         if len(labels) < 2:
             return []
         entities = "\n".join(f'- "{s}" ({"/".join(sorted(ls))})' for s, ls in labels.items())
-        self_reference = ""
-        if self_name:
-            terms = ", ".join(f'"{t}"' for t in self_terms) or '"we", "us", "our"'
-            self_reference = (f"In this text {terms} refer to {self_name}; report those "
-                              f'relations with "{self_name}" as the entity.\n\n')
-        prompt = USER_PROMPT.format(self_reference=self_reference, entities=entities,
-                                    relations=self._relation_lines(), text=text)
-        usage: dict = {}
-        try:
-            content, usage = self.llm._chat_full(
-                [{"role": "system", "content": SYSTEM_PROMPT},
-                 {"role": "user", "content": prompt}])
-            items = parse_json_object(content).get("relations") or []
-        except (RuntimeError, ValueError, json.JSONDecodeError) as exc:
-            _count(usage, failed=True)
-            log.warning("Relation reader failed on a window: %s", exc)
-            return []
-        _count(usage)
+        prompt = USER_PROMPT.format(self_reference=self._self_reference(self_name, self_terms),
+                                    entities=entities, relations=self._relation_lines(),
+                                    text=text)
+        data = self._ask(prompt)
+        return self._check(data.get("relations") or [], labels, text) if data else []
 
+    def _check(self, items: list, labels: dict[str, set[str]],
+               text: str) -> list[RelationProposal]:
+        """The answered relations that pass every check (ends, relation, types, quote)."""
         by_fold = {s.casefold(): s for s in labels}
         proposals: list[RelationProposal] = []
         for item in items:

@@ -99,7 +99,13 @@ def _read_window(extractor: Extractor, text: str, doc_key: str,
     text, map its mentions and evidence back to the original, and keep both
     readings (D28). Neither wins everywhere: "our Chief Financial Officer"
     needs the name, but "our audit committee" read as "CoreWeave's audit
-    committee" pulls the member edge onto the company."""
+    committee" pulls the member edge onto the company.
+
+    An extractor that ``reads_self_reference`` (the LLM-only backend, D34) is
+    told who "we" is instead and reads the window once."""
+    if getattr(extractor, "reads_self_reference", False):
+        return extractor.extract(text, doc_key, ref.short if ref else None,
+                                 ref.terms if ref else ())
     plain = extractor.extract(text, doc_key)
     if ref is None:
         return plain
@@ -165,7 +171,8 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
         overlap=config.chunk_overlap_sentences,
         max_chars=config.chunk_max_chars,
     )
-    reader = _relation_reader(config)
+    # The LLM-only backend already reads relations; the reader would repeat it.
+    reader = None if getattr(extractor, "reads_self_reference", False) else _relation_reader(config)
     if len(chunks) <= 1:
         return _extract_window(extractor, text, doc_key, ref, reader)
 
@@ -175,20 +182,28 @@ def extract_document(extractor: Extractor, text: str, doc_key: str,
     relations: dict[tuple, dict[str, RelationProposal]] = {}
     skipped = 0
     windows = []
-    pool = ThreadPoolExecutor(READER_WORKERS) if reader is not None else None
+    # A network-bound extractor (the LLM-only backend) reads windows in the
+    # pool too; GLiNER reads them here while the pool holds reader calls.
+    concurrent = getattr(extractor, "concurrent", False)
+    pool = ThreadPoolExecutor(READER_WORKERS) if reader is not None or concurrent else None
     for chunk in chunks:
         if profile.skips(chunk.text):
             skipped += 1
             continue
-        result = _read_window(extractor, chunk.text, doc_key, ref)
-        future = pool.submit(_read_relations, reader, chunk.text, result, ref) if pool else None
+        if concurrent:
+            result = pool.submit(_read_window, extractor, chunk.text, doc_key, ref)
+        else:
+            result = _read_window(extractor, chunk.text, doc_key, ref)
+        future = pool.submit(_read_relations, reader, chunk.text, result, ref) if reader else None
         windows.append((chunk, result, future))
     if pool is not None:
         pool.shutdown(wait=True)
         from .extract.relation_reader import USAGE
 
-        log.info("Relation reader totals so far: %s", USAGE)
+        log.info("LLM totals so far: %s", USAGE)
     for chunk, result, future in windows:
+        if concurrent:
+            result = result.result()
         if future is not None:
             result = _add_read(result, future.result())
         result = expand_coordination(result, chunk.text)

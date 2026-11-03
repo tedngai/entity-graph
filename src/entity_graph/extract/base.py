@@ -80,13 +80,20 @@ def get_extractor(backend: str, config=None) -> Extractor:
         from .llm import LlmExtractor
 
         extractor = LlmExtractor()
+    elif backend == "llm_ie":
+        from ..config import load_config
+        from ..doc_profiles import get_document_profile
+        from .llm_ie import LlmIeExtractor
+
+        profile = get_document_profile((config or load_config()).doc_profile)
+        extractor = LlmIeExtractor(profile.ontology)
     else:
         raise ValueError(
             f"Unknown extraction backend {backend!r} "
-            "(expected baseline | spacy | gliner2 | llm)"
+            "(expected baseline | spacy | gliner2 | llm | llm_ie)"
         )
 
-    if getattr(config, "escalate", False) and backend != "llm":
+    if getattr(config, "escalate", False) and backend not in ("llm", "llm_ie"):
         from .escalation import EscalatingExtractor
 
         extractor = EscalatingExtractor(
