@@ -1002,6 +1002,23 @@ Still missed: three LTBT trustees and Nscale SUPPLIES (Anthropic), Pure and
 Vast PARTNERED_WITH (CoreWeave). Extraction with the reader took ~2h20m per
 filing (4 workers, both filings at once) against ~2h without.
 
+Precision audit (P9.7), promoted edges outside gold, 30-edge seeded samples
+per stratum per filing, judged by hand against the stored evidence (correct =
+the quote states that relation between two named entities, right direction):
+edges in both runs (GLiNER's) 9/60 correct, +2 borderline (CoreWeave 6/30,
+Anthropic 3/30); reader proposals 30/40 (18/22, 12/18); edges that appear in
+one run only and did not come from the reader (run-to-run churn) 1/20. Of the
+GLiNER errors 34/60 have a generic endpoint ("employees", "the company",
+"underwriters", "chief executive officer") and 15 a wrong relation or one the
+text does not state (director as ADVISOR_TO or WORKS_FOR, lender as
+PARTNERED_WITH). So the reader raises precision as well as recall; the
+graph's precision problem is generic GLiNER endpoints the gate does not
+judge. About half of every run's edges have an all-lowercase endpoint, but a
+filter on that alone would drop 12–16 gold edges (the registrant's own "board
+of directors" and committees), so it needs an exemption for those.
+Reader proposals were stored with extractor `gliner2` until
+`RelationProposal.extractor` was added; they are now `llm_reader`.
+
 **Consequences.** Entity-count triggers select 85–95% of filing windows (they
 are entity-dense), so a full S-1 costs ~3.8M tokens (Anthropic) / ~1.9M
 (CoreWeave) at one call per window; about two thirds of each prompt is fixed

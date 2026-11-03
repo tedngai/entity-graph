@@ -52,6 +52,7 @@ def test_reader_keeps_checked_relations_and_quotes_the_text() -> None:
         ("Ernst & Young LLP", "AUDITOR_OF", "CoreWeave"),
     ]
     assert proposals[0].evidence == "passed upon for us by Fenwick & West LLP."
+    assert {p.extractor for p in proposals} == {"llm_reader"}  # provenance, not gliner2
     assert proposals[1].evidence in TEXT  # unquotable evidence falls back to the text
     assert '"we", "us", "our" refer to CoreWeave' in llm.prompts[0]
 

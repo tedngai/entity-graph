@@ -185,5 +185,6 @@ class RelationReader:
                 source_surface=head, target_surface=tail, relation=stored_relation(name),
                 evidence=evidence, confidence=CONFIDENCE,
                 source_type=sorted(head_labels)[0], target_type=sorted(tail_labels)[0],
+                extractor=self.name,
             ))
         return proposals

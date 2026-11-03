@@ -38,6 +38,9 @@ class RelationProposal:
     # for relation agreement and skips that check when they are missing.
     source_type: str = ""
     target_type: str = ""
+    # Who proposed it, when not the document's extractor (e.g. the D33 reader).
+    # Stored as the proposal's and fact's extractor for provenance.
+    extractor: str = ""
 
 
 @dataclass
