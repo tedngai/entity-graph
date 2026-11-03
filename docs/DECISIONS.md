@@ -1076,3 +1076,30 @@ The LLM-only graph is far cleaner (whole-graph precision roughly 75–95%
 against ~25–35% for the hybrid, whose GLiNER edges the rule did not weigh)
 and 10× faster at similar token cost; the Anthropic gap is concentrated in
 relation choice for managers and one resolution merge. Off by default.
+
+**Follow-up: larger models, reasoning off.** `pratt-high` and `pratt-agent` at
+`reasoning_effort` low reasoned to the reply cap (2,048) and answered nothing;
+at 8,192 one window cost 54 s / 7.4k tokens (high) and 11.5 s / 3k (agent).
+`LLM_REASONING_EFFORT=none` turns reasoning off on both (~3 s, ~1.5k tokens a
+window); `low` stays the default for `pratt-medium`. Full runs, same prompt,
+gate and audit (`coreweave_s1_v7`/`v8`, `anthropic_s1_v8`/`v9`):
+
+| | pratt-medium (low) | pratt-high (none) | pratt-agent (none) |
+|---|---|---|---|
+| CoreWeave gold | 51/54 | 49/54 | 45/54 |
+| Anthropic gold | 49/60 | 49/60 | 44/60 |
+| Promoted edges (CW / An) | 299 / 315 | 275 / 323 | 217 / 248 |
+| Non-gold correct, strict (lenient) | 68% / 68% (83% / 95%) | 72.5% / 72.5% (97.5% / 92.5%) | 82.5% / 75% (95% / 92.5%) |
+| Trap leaks | LTBT SUBSIDIARY_OF | none | none |
+| LLM tokens (both filings) | 5.5M | 5.4M | 5.6M |
+| Extract time per filing | 20–30 min | 8–14 min | 6–9 min |
+
+`pratt-high` finds every CoreWeave governance fact (36/36) and Amazon
+INVESTED_IN on Anthropic, but misses CoreWeave's data-center suppliers (Core
+Scientific, Switch, Chirisa read as partners) and NVIDIA. `pratt-agent` is
+the most precise and the least complete: on Anthropic it proposes none of the
+nominating committee, Dr. Shah's LTBT seat or two underwriters. Neither meets
+the rule (high: Anthropic 6 behind, 72.5% strict; agent: 6 and 11 behind), so
+the hybrid stays the default. Errors left in all three are shared: managers
+and trustees as MEMBER_OF/ADVISOR_TO, directors as WORKS_FOR from the
+management table, the LTBT trustees and Public Benefit Fund managers.
