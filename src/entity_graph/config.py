@@ -57,6 +57,10 @@ class Config:
     # reasoned to the cap and returned nothing).
     llm_max_tokens: int = 2048
     llm_timeout: float = 120.0
+    # reasoning_effort sent with reader/llm_ie calls (D33/D34); empty sends none.
+    # "none" turns reasoning off on pratt-high and pratt-agent (~3 s, ~1.7k
+    # tokens a window, like pratt-medium at "low").
+    llm_reasoning_effort: str = "low"
     escalate: bool = False
     # LLM relation reader per window (D33): off | all.
     relation_reader: str = "off"
@@ -166,6 +170,7 @@ def load_config() -> Config:
         llm_model=env("LLM_MODEL", llm_model_default),
         llm_max_tokens=int(env("LLM_MAX_TOKENS", "2048")),
         llm_timeout=float(env("LLM_TIMEOUT", "120")),
+        llm_reasoning_effort=env("LLM_REASONING_EFFORT", "low").strip().lower(),
         escalate=env("EXTRACTION_ESCALATE", "").strip().lower() in ("1", "true", "yes"),
         relation_reader=env("RELATION_READER", "off").strip().lower(),
         escalation_confidence=float(env("ESCALATION_CONFIDENCE", "0.5")),

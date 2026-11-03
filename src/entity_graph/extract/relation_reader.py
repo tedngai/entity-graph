@@ -74,10 +74,6 @@ TEXT:
 """
 
 CONFIDENCE = 0.6
-# pratt-medium is a reasoning model: uncapped it reasoned 32,768 tokens and
-# answered nothing; at "low" it answers in ~1,400 tokens and still finds
-# counsel (with thinking off it did not).
-LLM_OPTIONS = {"reasoning_effort": "low"}
 # Running totals over every reader call in this process (calls, tokens).
 USAGE = {"calls": 0, "failed": 0, "prompt_tokens": 0, "completion_tokens": 0}
 _USAGE_LOCK = threading.Lock()
@@ -119,7 +115,15 @@ class RelationReader:
         self.labels_for_type: dict[str, set[str]] = {}
         for label, entity_type in ontology.label_to_type.items():
             self.labels_for_type.setdefault(entity_type, set()).add(label)
-        self.llm = llm or LlmExtractor(timeout=load_config().llm_timeout, extra=LLM_OPTIONS)
+        if llm is None:
+            # pratt-medium is a reasoning model: uncapped it reasoned 32,768
+            # tokens and answered nothing; at "low" it answers in ~1,400 tokens
+            # and still finds counsel (with thinking off it did not).
+            config = load_config()
+            effort = config.llm_reasoning_effort
+            llm = LlmExtractor(timeout=config.llm_timeout,
+                               extra={"reasoning_effort": effort} if effort else None)
+        self.llm = llm
 
     @property
     def enabled(self) -> bool:
