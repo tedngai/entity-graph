@@ -19,6 +19,7 @@ import logging
 import re
 import threading
 
+from ..config import load_config
 from .base import Mention, RelationProposal
 from .gliner_extractor import _evidence_for
 from .llm import LlmExtractor, parse_json_object
@@ -118,7 +119,7 @@ class RelationReader:
         self.labels_for_type: dict[str, set[str]] = {}
         for label, entity_type in ontology.label_to_type.items():
             self.labels_for_type.setdefault(entity_type, set()).add(label)
-        self.llm = llm or LlmExtractor(timeout=120, extra=LLM_OPTIONS)
+        self.llm = llm or LlmExtractor(timeout=load_config().llm_timeout, extra=LLM_OPTIONS)
 
     @property
     def enabled(self) -> bool:

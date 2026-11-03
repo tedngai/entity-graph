@@ -60,9 +60,6 @@ TEXT:
 """
 
 MENTION_CONFIDENCE = 0.6
-# Hard cap on reply tokens. Reasoning models count hidden reasoning here; an
-# uncapped pratt-medium call spent 32,768 tokens reasoning and returned nothing.
-MAX_TOKENS = 2048
 RELATION_CONFIDENCE = 0.6
 
 
@@ -104,14 +101,14 @@ class LlmExtractor:
 
     def __init__(self, model: str | None = None, api_key: str | None = None,
                  url: str | None = None, timeout: float = 60.0,
-                 max_tokens: int = MAX_TOKENS, extra: dict | None = None) -> None:
+                 max_tokens: int | None = None, extra: dict | None = None) -> None:
         config = load_config()
         self.model = model if model is not None else config.llm_model
         self.api_key = api_key if api_key is not None else config.llm_api_key
         self.url = url if url is not None else config.llm_url
         self.timeout = timeout
         self.last_usage: dict = {}
-        self.max_tokens = max_tokens
+        self.max_tokens = max_tokens if max_tokens is not None else config.llm_max_tokens
         self.extra = dict(extra or {})
         self.headers = {"Content-Type": "application/json"}
         if config.openrouter_referer:

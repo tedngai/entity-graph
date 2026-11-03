@@ -51,6 +51,12 @@ class Config:
     llm_url: str = "https://openrouter.ai/api/v1/chat/completions"
     llm_api_key: str = ""
     llm_model: str = "openai/gpt-4o-mini"
+    # Reply-token cap and per-call timeout for LLM calls. Reasoning models
+    # count hidden reasoning here: uncapped, pratt-medium spent 32,768 tokens
+    # and answered nothing; pratt-high and pratt-agent need ~8k (at 2,048 they
+    # reasoned to the cap and returned nothing).
+    llm_max_tokens: int = 2048
+    llm_timeout: float = 120.0
     escalate: bool = False
     # LLM relation reader per window (D33): off | all.
     relation_reader: str = "off"
@@ -158,6 +164,8 @@ def load_config() -> Config:
         llm_url=env("LLM_URL", llm_url_default),
         llm_api_key=env("LLM_API_KEY", "") or llm_key_default,
         llm_model=env("LLM_MODEL", llm_model_default),
+        llm_max_tokens=int(env("LLM_MAX_TOKENS", "2048")),
+        llm_timeout=float(env("LLM_TIMEOUT", "120")),
         escalate=env("EXTRACTION_ESCALATE", "").strip().lower() in ("1", "true", "yes"),
         relation_reader=env("RELATION_READER", "off").strip().lower(),
         escalation_confidence=float(env("ESCALATION_CONFIDENCE", "0.5")),
