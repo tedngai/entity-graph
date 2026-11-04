@@ -21,7 +21,7 @@ import re
 from .base import ExtractionResult, Mention
 from .llm import LlmExtractor
 from .ontology import Ontology
-from .relation_reader import CONFIDENCE, RelationReader, _locate_quote
+from .relation_reader import CONFIDENCE, SPLIT_ENDS, RelationReader, _locate_quote
 
 USER_PROMPT = """\
 {self_reference}Entity types:
@@ -43,6 +43,8 @@ Copy each entity's text exactly as it appears in the text.
 
 Skip relations that are only planned, possible, hypothetical, negated or your
 own inference. The head and tail must fit the types shown for the relation.
+
+{split_ends}
 
 Return JSON: {{"entities": [{{"text": "<verbatim>", "type": "<type>"}}],
 "relations": [{{"head": "<entity>", "relation": "<relation name>", "tail": "<entity>",
@@ -77,7 +79,7 @@ class LlmIeExtractor(RelationReader):
         prompt = USER_PROMPT.format(
             self_reference=self._self_reference(self_name, self_terms),
             types=self._type_lines(), relations=self._relation_lines(),
-            self_name=self_name or "the author", text=text)
+            self_name=self_name or "the author", split_ends=SPLIT_ENDS, text=text)
         data = self._ask(prompt)
         if not data:
             return ExtractionResult(doc_key, [], [])

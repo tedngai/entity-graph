@@ -30,23 +30,41 @@ log = logging.getLogger(__name__)
 # What each relation means, head -> tail. GLiNER ignores descriptions; an LLM
 # needs the direction spelled out.
 RELATION_MEANINGS: dict[str, str] = {
-    "works_for": "head is employed by, or holds an officer role at, tail",
-    "located_in": "head is located or headquartered in tail",
+    "works_for": "head is or was employed by, or holds or held an officer or staff role at, "
+                 "tail; a board seat alone is member_of, not works_for",
+    "located_in": "head is located, headquartered or has an office in tail; the state it is "
+                  "incorporated in does not count, and an address counts only for its owner",
     "founded": "head founded or co-founded tail",
-    "leads": "head is the chief executive, president, chair or head of tail "
-             "(including chair of a board committee)",
-    "partnered_with": "head and tail have a partnership or collaboration",
+    "leads": "head is the chief executive, president, chair, manager, managing member or head "
+             "of tail (including chair of a board committee); other officers (finance, "
+             "operations, science) are works_for, and heading a team inside tail is not "
+             "leading tail",
+    "partnered_with": "head and tail have a stated partnership or collaboration; a provider or "
+                      "customer with no stated partnership is supplies",
     "acquired": "head acquired or agreed to acquire tail",
-    "invested_in": "head invested in, or holds equity bought in, tail",
-    "member_of": "head is a member of tail (a board, committee, trust or group)",
-    "subsidiary_of": "head is a subsidiary of, or wholly owned by, tail",
-    "supplies": "head sells or provides goods, services or capacity to tail",
+    "invested_in": "head invested in, or holds equity bought in, tail, including a named "
+                   "beneficial owner of tail's stock",
+    "member_of": "head is a member, director or trustee of tail (a board, committee, company, "
+                 "trust or group)",
+    "subsidiary_of": "head is a subsidiary of, or wholly owned by, tail; a trust or fund that "
+                     "only holds shares or voting rights is not a subsidiary",
+    "supplies": "head sells or provides goods, services, capacity or facilities to tail, "
+                "including a customer named as such; lenders and agents of a loan are not "
+                "suppliers",
     "sued": "head filed a lawsuit or claim against tail",
-    "underwriter_of": "head is an underwriter of tail's securities offering",
+    "underwriter_of": "head is an underwriter of tail's securities offering; arrangers and "
+                      "bookrunners of a loan are not underwriters",
     "auditor_of": "head is the independent auditor (registered public accounting firm) of tail",
-    "advisor_to": "head advises tail, including as its legal counsel",
+    "advisor_to": "head advises tail, including as its legal counsel; lenders and agents of a "
+                  "loan are not advisors",
     "develops": "head develops or makes tail",
 }
+
+# A biography often gives the title alone ("has served as a Trustee"); the
+# organization is named earlier in the window.
+SPLIT_ENDS = """The two ends can be in different sentences: a title with no organization beside
+it ("has served as a Trustee") belongs to the organization the text is
+discussing, if the text names it."""
 
 SYSTEM_PROMPT = (
     "You read documents and report the relationships they state. "
@@ -64,6 +82,8 @@ List every relation from the list above that the text states as fact between
 two of the listed entities. Skip relations that are only planned, possible,
 hypothetical, negated or your own inference. The head and tail must fit the
 types shown for the relation.
+
+{split_ends}
 
 Return JSON: {{"relations": [{{"head": "<entity>", "relation": "<relation name>",
 "tail": "<entity>", "evidence": "<verbatim quote from the text, one or two sentences>"}}]}}
@@ -173,7 +193,7 @@ class RelationReader:
         entities = "\n".join(f'- "{s}" ({"/".join(sorted(ls))})' for s, ls in labels.items())
         prompt = USER_PROMPT.format(self_reference=self._self_reference(self_name, self_terms),
                                     entities=entities, relations=self._relation_lines(),
-                                    text=text)
+                                    split_ends=SPLIT_ENDS, text=text)
         data = self._ask(prompt)
         return self._check(data.get("relations") or [], labels, text) if data else []
 

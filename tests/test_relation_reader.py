@@ -72,3 +72,11 @@ def test_reader_skips_windows_with_fewer_than_two_entities() -> None:
     reader, llm = _reader([])
     assert reader.read(TEXT, MENTIONS[:1]) == []
     assert llm.prompts == []
+
+
+def test_every_filing_relation_has_a_meaning() -> None:
+    from entity_graph.doc_profiles import get_document_profile
+    from entity_graph.extract.relation_reader import RELATION_MEANINGS
+
+    specs = get_document_profile("sec_filing").ontology.relation_specs
+    assert {s.name for s in specs} <= set(RELATION_MEANINGS)
