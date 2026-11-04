@@ -1103,3 +1103,52 @@ the rule (high: Anthropic 6 behind, 72.5% strict; agent: 6 and 11 behind), so
 the hybrid stays the default. Errors left in all three are shared: managers
 and trustees as MEMBER_OF/ADVISOR_TO, directors as WORKS_FOR from the
 management table, the LTBT trustees and Public Benefit Fund managers.
+
+## D35 — Sharper relation meanings for the reader and `llm_ie`
+
+**Context.** D34's LLM-only runs shared one kind of error across models:
+managers read as members, directors as employees from the management table,
+providers as partners, lenders as suppliers or advisors. These are boundaries
+between relations, which `RELATION_MEANINGS` did not state.
+
+**Decision.** State the boundaries in `RELATION_MEANINGS`, naming no filing or
+company: a board seat is `member_of`, not `works_for`; managers and managing
+members `lead`, while other officers and team heads do not; a provider with no
+stated partnership `supplies`; lenders and loan agents are not suppliers,
+advisors or underwriters; the state of incorporation is not a location; a trust
+that only holds shares is not a subsidiary; a named beneficial owner has
+`invested_in`. Both prompts add that a title with no organization beside it
+belongs to the organization the text discusses.
+
+**Why (full runs, `pratt-medium`, low reasoning; `coreweave_s1_v9`,
+`anthropic_s1_v10`; same gate and audit as D34).**
+
+| | Hybrid (D33 wording) | LLM-only, D34 wording | LLM-only, D35 wording |
+|---|---|---|---|
+| CoreWeave gold | 51/54 | 51/54 | 54/54 |
+| Anthropic gold | 55/60 | 49/60 | 54/60 |
+| Promoted edges (CW / An) | 753 / 1,024 | 299 / 315 | 343 / 338 |
+| Non-gold correct, strict (CW / An) | ~15% + reader 75% | 68% / 68% | 72.5% / 75% |
+| Lenient (CW / An) | | 83% / 95% | 95% / 92.5% |
+| LLM tokens (both filings) | 4.4M | 5.5M | 6.6M |
+| Wall time per filing | ~5.5 h | 20–30 min | 20–23 min |
+
+Gold-window probe, kept, old to new wording: `pratt-medium` greengrid 7 to 7,
+Anthropic 50 to 52, CoreWeave 49 to 52, traps proposed 0; `pratt-high` 7 to 7,
+47 to 48, 44 to 51, so only `pratt-medium` went to full runs. Hybrid probe with
+the new wording: 8, 54, 51 kept, traps proposed 6, kept 2, close to its full-run
+55 and 51, so the hybrid's D33 numbers stayed the bar; it has not had a full run
+on this wording.
+
+Anthropic misses: three LTBT trustees (no window ties the biography to the trust
+clearly enough; the new title rule did not recover them), Google INVESTED_IN
+under "Google LLC" (not a gold alias), SpaceXAI SUPPLIES, Bartz SUED (gate 0.43).
+LTBT SUBSIDIARY_OF still leaks (one edge, 3 quotes: "consolidated VIE").
+
+**Consequences.** On the D34 rule, recall is met (CoreWeave 3 ahead of the
+hybrid, Anthropic 1 behind) and precision narrowly is not: Anthropic reaches 75%
+strict, CoreWeave 72.5%, one edge of 40 short. A sample of 40 carries about ±14
+points, and the judgments are mine, made knowing the bar. The wording was written
+from errors on these same gold sets, and no filing is held out, so 54/54 likely
+flatters it. `llm_ie` stays opt-in until the user decides.
+
