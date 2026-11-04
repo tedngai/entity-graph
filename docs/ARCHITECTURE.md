@@ -49,7 +49,8 @@ Orchestrated by `pipeline.py`, exposed through `cli.py`
 | `extract/baseline_extractor.py` | Zero-dep heuristic extractor (capitalized spans, same-sentence `RELATED_TO`) — for tests and first runs |
 | `extract/spacy_extractor.py` | spaCy backend (skeleton; needs `pip install -e .[extraction]` + model) |
 | `extract/ontology.py` | Shared entity/relation schema for JointIE and the Decide gate |
-| `extract/gliner_extractor.py` | GLiNER2.5 JointIE backend (primary). Independent `.relations()` only if `joint_ie` is missing |
+| `extract/gliner_extractor.py` | GLiNER2.5 JointIE backend (primary outside SEC filings). Independent `.relations()` only if `joint_ie` is missing |
+| `extract/llm_ie.py` | LLM-only backend: one call per window for entities and relations, recommended for SEC filings (D35) |
 | `extract/gate.py` | Pure promotion rule (`should_promote`). Does not call a model |
 | `extract/decide.py` | Local GLiNER2.5-Decide gate, used only when Jev is not configured |
 | `extract/jev.py` | SystemOne client: `decide()` + `align_pair()` + `judge_relations()` (Noul + modality Choice) |

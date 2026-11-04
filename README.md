@@ -55,9 +55,27 @@ $env:EXTRACTION_BACKEND = "gliner2"   # uses fastino/gliner2.5-base-v1 (GLINER_D
 ```
 
 Backends: `baseline` (zero-dep), `spacy` (fast local fallback), `gliner2`
-(primary, GPU-friendly), and `llm` (OpenAI-compatible, escalation only).
+(primary for documents other than filings, GPU-friendly), `llm_ie` (LLM-only,
+recommended for SEC filings, below), and `llm` (OpenAI-compatible, escalation
+only).
 `GLINER_DEVICE` (`auto` | `cpu` | `cuda`), `GLINER_MODEL`, and `GLINER_THRESHOLD`
 tune the GLiNER2 backend; see `.env.example`.
+
+**SEC filings: use the LLM-only backend.** One LLM call per window finds the
+entities and relations together, and the usual gate still judges every relation.
+It needs an LLM key but no GLiNER, spaCy or GPU:
+
+```powershell
+$env:DOC_PROFILE = "sec_filing"
+$env:EXTRACTION_BACKEND = "llm_ie"    # model pratt-medium, reasoning low
+$env:LLM_TIMEOUT = "300"              # the router queues under load
+```
+
+A filing took 20–23 minutes and about 3.3M tokens in our runs, against about 5.5
+hours and 2.2M tokens for GLiNER plus `RELATION_READER=all`. Recall on the two
+gold filings is about level with that hybrid and the graph is far cleaner, but
+no filing has been held out yet, so treat those scores as optimistic. It has not
+been tried in full on other document kinds. See `docs/DECISIONS.md` D34, D35.
 
 **OCR documents.** Scanned/OCR sources carry page scaffolding (`## Page N:
 imageNNNNN.jpg`, `---`, code fences), inline footnote markers, and

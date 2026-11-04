@@ -1150,5 +1150,16 @@ hybrid, Anthropic 1 behind) and precision narrowly is not: Anthropic reaches 75%
 strict, CoreWeave 72.5%, one edge of 40 short. A sample of 40 carries about ±14
 points, and the judgments are mine, made knowing the bar. The wording was written
 from errors on these same gold sets, and no filing is held out, so 54/54 likely
-flatters it. `llm_ie` stays opt-in until the user decides.
+flatters it.
+
+**Update (2026-11-04): `llm_ie` is the recommended setup for SEC filings.** The
+user chose this knowing the rule was missed by the letter, so it is an override,
+not a pass. The reasons: the shortfall is inside the sample's error; whole-graph
+precision is roughly 78–80% against the hybrid's roughly 25–35% (both rough
+estimates); and a filing takes 20–23 minutes against about 5.5 hours, for about
+50% more tokens. This changes the guidance only (`README.md`, `.env.example`):
+`EXTRACTION_BACKEND` still defaults to `baseline`, and `gliner2` remains the
+path for other document kinds, where `llm_ie` has had no full run. A filing
+outside these gold sets, with its own gold set, is the test still owed; if it
+falls well short, this recommendation should be revisited.
 

@@ -25,11 +25,12 @@ streaming ingestion, multi-tenant isolation.
 - **Schema**: `db/schema.sql` is the single source of truth. Migrations are
   new numbered files in `db/migrations/` once the first migration exists.
 - **Extraction**: pluggable backends implementing `entity_graph.extract.base.Extractor`
-  (`baseline` → `spacy` → `gliner2` → `llm`). Primary path is GLiNER2.5
-  **JointIE** (`extract/ontology.py` + `extract/gliner_extractor.py`, D13).
-  spaCy is a lightweight fallback; the LLM backend is an **opt-in
-  escalation wrapper** (`EscalatingExtractor`) over a cheap backend, never the
-  default (D2, D11).
+  (`baseline` → `spacy` → `gliner2` → `llm`, plus `llm_ie`). Primary path is
+  GLiNER2.5 **JointIE** (`extract/ontology.py` + `extract/gliner_extractor.py`,
+  D13), except for SEC filings, where `llm_ie` is the recommended setup (D35).
+  It is selected explicitly; the code default stays `baseline`. spaCy is a
+  lightweight fallback; the `llm` backend is an **opt-in escalation wrapper**
+  (`EscalatingExtractor`) over a cheap backend, never the default (D2, D11).
 - **Ingestion**: OCR documents are cleaned at ingest (`preprocess.py`, D16) —
   page scaffolding, footnote markers, page-break rejoin, and de-hyphenation —
   before storage, so offsets/evidence index the cleaned text.
