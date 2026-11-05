@@ -1163,3 +1163,33 @@ path for other document kinds, where `llm_ie` has had no full run. A filing
 outside these gold sets, with its own gold set, is the test still owed; if it
 falls well short, this recommendation should be revisited.
 
+## D36 — A held-out filing for `llm_ie`, with its key and rule fixed before the run
+
+**Status:** rule proposed by the assistant, open to change until the run starts ·
+**Date:** 2026-11-04
+
+**Context.** D35 made `llm_ie` the recommended setup for SEC filings with no
+filing held out, and its wording came from errors on the same gold sets. Both
+are AI companies.
+
+**Decision.** Test on CAVA Group's S-1, a restaurant chain, with
+`data/gold/cava_s1.jsonl` (88 facts, 7 traps), written from the filing text and
+committed before any extraction. The configuration is D35's, unchanged. Prompts,
+profile and gold stay frozen for this run; a fix made after seeing the score
+would need another filing to test it.
+
+**How the result will be read.** The D35 recommendation stands if all three hold:
+
+- recall of at least 75% (66 of 88 facts), as reported by `eval`;
+- strict precision of at least 65% (26 of 40) on a seeded random sample of
+  non-gold promoted edges, judged as in D34;
+- at most 2 of the 7 trap edges leaked, counting edges rather than quotes.
+
+Otherwise the recommendation goes back to the user. Failing does not reverse it
+automatically, because no alternative has been run on this filing.
+
+**Limits.** The thresholds are judgment calls: below the 90–100% recall and
+72.5–75% precision on the tuned filings, allowing for some loss on unseen text,
+but with no baseline for this filing. A sample of 40 carries about ±14 points.
+The same assistant wrote the wording and the key and will judge the sample, so a
+spot check by someone else would strengthen the result.
