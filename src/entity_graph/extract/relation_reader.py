@@ -58,6 +58,8 @@ RELATION_MEANINGS: dict[str, str] = {
     "advisor_to": "head advises tail, including as its legal counsel; lenders and agents of a "
                   "loan are not advisors",
     "develops": "head develops or makes tail",
+    "lends_to": "head lends money to tail, or is a lender, administrative agent, collateral "
+                "agent or arranger of a loan, credit facility or notes extended to tail",
 }
 
 # A biography often gives the title alone ("has served as a Trustee"); the

@@ -1322,7 +1322,7 @@ run-to-run variation in quote choice, not something D38 addresses.
 
 ## D39 — Trial: FIBO-style `lends_to` and `manages` relations
 
-**Status:** trial, not adopted · **Date:** 2026-11-07
+**Status:** `lends_to` adopted, `manages` not · **Date:** 2026-11-07
 
 **Context.** Reviewing ontology standards (schema.org, FOAF, Dublin Core,
 DBpedia, FIBO, RDFS/OWL) against the pipeline: its typed relation set, type
@@ -1367,3 +1367,10 @@ quote choice.
 displaces only wrong labels. `manages` overlaps `leads` and `member_of`; adopting
 it means narrowing those meanings and re-keying the gold sets' manager and
 trustee facts, a schema decision left to the user. Nothing is adopted yet.
+
+**Adopted (2026-11-07).** The user chose `lends_to` only: it is now in the
+`sec_filing` relations with the meaning above. `manages` is not adopted, so
+`leads` and `member_of` keep their D35 meanings and no gold set changes. The
+`lends_to`-only configuration has not been probed or run on its own (the trial
+measured both relations together), and the GLiNER backend now also sees the
+`lends_to` label, untested.

@@ -84,6 +84,9 @@ _SEC_RELATIONS = RELATION_SPECS + (
     RelationSpec("auditor_of", ("organization",), ("organization",)),
     RelationSpec("advisor_to", ("organization", "person"), ("organization",)),
     RelationSpec("develops", ("organization",), ("product",)),
+    # FIBO's lender/borrower distinction (D39): without it lenders and loan
+    # agents had no relation and landed on supplies or advisor_to.
+    RelationSpec("lends_to", ("organization",), ("organization",)),
 )
 
 SEC_FILING = DocumentProfile(
