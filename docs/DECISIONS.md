@@ -1319,3 +1319,51 @@ precision or about quote choice elsewhere in a full run; CAVA is no longer held
 out, so its numbers confirm the fix rather than test it. The committee facts
 passing here, after failing as forecasts in the D37 rerun, is the same
 run-to-run variation in quote choice, not something D38 addresses.
+
+## D39 — Trial: FIBO-style `lends_to` and `manages` relations
+
+**Status:** trial, not adopted · **Date:** 2026-11-07
+
+**Context.** Reviewing ontology standards (schema.org, FOAF, Dublin Core,
+DBpedia, FIBO, RDFS/OWL) against the pipeline: its typed relation set, type
+checks and gate already do what RDFS domain/range and a validator would, and an
+OWL asymmetry check found no contradictory two-way edges in the latest graphs
+(the only two-way edges are real mutual supplier links). FIBO's distinctions
+between lending, ownership and control are where the errors were: with no
+lender or manager relation, lenders landed on `supplies` / `advisor_to` and
+general partners on `invested_in`.
+
+**Trial.** Two relations added outside the repo (scratch script), meanings:
+
+- `lends_to`: head lends to tail, or is a lender, administrative or collateral
+  agent, or arranger of a loan, facility or notes extended to tail.
+- `manages`: head is the manager, general partner, managing partner or
+  investment adviser of tail, a fund, partnership, trust or investment vehicle.
+
+**Results.** 260 windows mentioning loans or fund managers (CAVA 63, CoreWeave
+121, Anthropic 76), each read with both relation sets and gated (520 calls,
+746k tokens):
+
+| | CAVA | CoreWeave | Anthropic |
+|---|---|---|---|
+| Proposals kept, current relations | 71 | 87 | 42 |
+| Proposals kept, with the two added | 83 | 122 | 46 |
+
+By my reading, about 9 in 10 of the new `lends_to` / `manages` pairs are right;
+the errors are mostly generic or truncated names ("OEM", "General Partner",
+"Bank, National Association") and one manager who is the subject's spouse. They
+replace about eight wrong labels (JPMorgan as CoreWeave's advisor, SunTrust as
+CAVA's supplier, Spark's general partners as investors in their own funds). But
+`manages` also takes over labels D35 counts correct: managing members and
+managers from `leads`, trustees from `member_of`.
+
+Gold-window probe, facts kept by the gate, D38 vs trial: GreenGrid 7 / 7,
+Anthropic 52 / 49, CoreWeave 52 / 51, CAVA 75 / 76 (440k tokens for both
+probes). The Anthropic drop is the four Public Benefit Fund managers, keyed as
+`LEADS` and now read as `MANAGES`; the other moves are within the noise of
+quote choice.
+
+**Consequences.** `lends_to` fills a gap no current relation covers and
+displaces only wrong labels. `manages` overlaps `leads` and `member_of`; adopting
+it means narrowing those meanings and re-keying the gold sets' manager and
+trustee facts, a schema decision left to the user. Nothing is adopted yet.
