@@ -110,5 +110,5 @@ class LlmIeExtractor(RelationReader):
                     key = _SPACE.sub(" ", str(item.get(end, ""))).strip().casefold()
                     item[end] = anchored.get(key, item.get(end, ""))
                 items.append(item)
-        relations = self._check(items, labels, text)
+        relations = self._check(items, labels, text, self_name)
         return ExtractionResult(doc_key, mentions, relations)

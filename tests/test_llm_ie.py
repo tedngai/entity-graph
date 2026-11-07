@@ -61,6 +61,44 @@ def test_llm_ie_anchors_entities_and_checks_relations() -> None:
     assert "generic nouns" in llm.prompts[0] and "CoreWeave's own board" in llm.prompts[0]
 
 
+UNDERWRITING = ("We are offering the shares through a number of underwriters. "
+                "J.P. Morgan Securities LLC and Jefferies LLC are acting as representatives "
+                "of the underwriters. The underwriters are committed to purchase all the "
+                "common shares offered by us. Glenn Hutchins joined our board in 2024. "
+                "Mr. Hutchins is the chair of our audit committee.")
+
+
+def test_a_quote_must_name_an_end_other_than_the_author() -> None:
+    extractor, _ = _extractor({
+        "entities": [
+            {"text": "J.P. Morgan Securities LLC", "type": "organization"},
+            {"text": "Jefferies LLC", "type": "organization"},
+            {"text": "Glenn Hutchins", "type": "person"},
+            {"text": "audit committee", "type": "organization"},
+        ],
+        "relations": [
+            # Names only "us": replaced by the sentence that names the firm.
+            {"head": "J.P. Morgan Securities LLC", "relation": "underwriter_of", "tail": "Acme",
+             "evidence": "The underwriters are committed to purchase all the common shares "
+                         "offered by us."},
+            # Names the firm: kept as given.
+            {"head": "Jefferies LLC", "relation": "underwriter_of", "tail": "Acme",
+             "evidence": "J.P. Morgan Securities LLC and Jefferies LLC are acting as "
+                         "representatives of the underwriters."},
+            # "Mr. Hutchins" names Glenn Hutchins by a distinctive part: kept.
+            {"head": "Glenn Hutchins", "relation": "leads", "tail": "audit committee",
+             "evidence": "Mr. Hutchins is the chair of our audit committee."},
+        ],
+    })
+    result = extractor.extract(UNDERWRITING, "doc", "Acme", ("we", "us", "our"))
+    quotes = {r.source_surface: r.evidence for r in result.relations}
+    assert quotes["J.P. Morgan Securities LLC"] == (
+        "J.P. Morgan Securities LLC and Jefferies LLC are acting as representatives "
+        "of the underwriters.")
+    assert quotes["Jefferies LLC"].startswith("J.P. Morgan Securities LLC and Jefferies LLC")
+    assert quotes["Glenn Hutchins"] == "Mr. Hutchins is the chair of our audit committee."
+
+
 def test_llm_ie_failure_yields_an_empty_window() -> None:
     class Broken(FakeLlm):
         def _chat_full(self, messages, temperature=0.0):

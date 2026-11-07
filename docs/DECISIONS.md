@@ -1285,3 +1285,37 @@ works at extraction but did not raise recall:
 The fix stays: it is correct on its face and removed most generic endpoints. The
 underwriter gap that remains is quote choice: a relation can carry quotes that
 name neither end.
+
+## D38 — A relation's quote must name an end other than the author
+
+**Status:** accepted · **Date:** 2026-11-07
+
+**Context.** D37's rerun proposed all of CAVA's underwriters, but the LLM often
+attached a quote that names neither end ("The underwriters are committed to
+purchase all the common shares offered by us"), and the gate rightly read those
+as `not_stated`. The quote that states the role named the firms but went to one
+of them only.
+
+**Decision.** In the reader's and `llm_ie`'s checks, a quote must name at least
+one end other than the author (who is often only "we"), in full or by a
+distinctive part of the name ("Mr. Hutchins", "J.P. Morgan"). Otherwise it is
+replaced by the sentences spanning the ends, as for a quote not found in the
+text. An end absent from the window (the author read from "we") now takes the
+other end's position instead of the window's start.
+
+**Why (gold-window probe, `llm_ie`, pratt-medium, gate pratt-d3).**
+
+| Gold set | Kept before (D35 wording) | Kept with D37 + D38 |
+|---|---|---|
+| GreenGrid | 7 | 7 |
+| Anthropic | 52 | 52 |
+| CoreWeave | 52 | 52 |
+| CAVA | — | 75 of 88 (83 proposed); all 5 underwriters and all 9 committee facts |
+
+Traps proposed 0 on all four. 174 calls, 272k tokens.
+
+**Consequences.** The probe reads only gold windows, so it says nothing about
+precision or about quote choice elsewhere in a full run; CAVA is no longer held
+out, so its numbers confirm the fix rather than test it. The committee facts
+passing here, after failing as forecasts in the D37 rerun, is the same
+run-to-run variation in quote choice, not something D38 addresses.

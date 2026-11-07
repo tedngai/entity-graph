@@ -117,6 +117,26 @@ def _locate_quote(text: str, quote: str) -> str | None:
     return match.group(0) if match else None
 
 
+# Name parts too common to show that a quote names a particular entity.
+_COMMON_PARTS = {
+    "inc", "corp", "corporation", "company", "co", "llc", "lp", "llp", "ltd", "plc", "pbc",
+    "the", "and", "group", "holdings", "board", "fund", "trust", "partners", "capital",
+    "securities", "bank", "national", "association", "management", "international",
+}
+
+
+def _names(quote: str, surface: str) -> bool:
+    """Whether ``quote`` names ``surface``: in full, or by a distinctive part of
+    the name ("Mr. Hutchins" for Glenn Hutchins, "J.P. Morgan" for J.P. Morgan
+    Securities LLC)."""
+    if surface.casefold() in quote.casefold():
+        return True
+    parts = [p for p in re.findall(r"[\w&'’.-]+", surface)
+             if p[:1].isupper() and len(p.strip(".")) >= 3
+             and p.strip(".").casefold() not in _COMMON_PARTS]
+    return any(re.search(rf"(?<![\w.]){re.escape(p)}(?!\w)", quote) for p in parts)
+
+
 def _count(usage: dict, failed: bool = False) -> None:
     with _USAGE_LOCK:
         USAGE["calls"] += 1
@@ -195,11 +215,17 @@ class RelationReader:
                                     entities=entities, relations=self._relation_lines(),
                                     split_ends=SPLIT_ENDS, text=text)
         data = self._ask(prompt)
-        return self._check(data.get("relations") or [], labels, text) if data else []
+        return self._check(data.get("relations") or [], labels, text, self_name) if data else []
 
-    def _check(self, items: list, labels: dict[str, set[str]],
-               text: str) -> list[RelationProposal]:
-        """The answered relations that pass every check (ends, relation, types, quote)."""
+    def _check(self, items: list, labels: dict[str, set[str]], text: str,
+               self_name: str | None = None) -> list[RelationProposal]:
+        """The answered relations that pass every check (ends, relation, types, quote).
+
+        A quote must name an end other than the author, who is often only "we"
+        (D38): "The underwriters are committed to purchase all the shares
+        offered by us" names no underwriter, so the gate rightly finds the
+        relation unstated. Such a quote is replaced by the sentences that do
+        name the ends."""
         by_fold = {s.casefold(): s for s in labels}
         proposals: list[RelationProposal] = []
         for item in items:
@@ -216,9 +242,14 @@ class RelationReader:
             if not (head_labels and tail_labels):
                 continue
             evidence = _locate_quote(text, str(item.get("evidence", "")).strip())
-            if evidence is None or not _squash(evidence):
-                evidence = _evidence_for(text, max(text.find(head), 0), max(text.find(tail), 0),
-                                         (head, tail))
+            others = [end for end in (head, tail) if end != self_name]
+            if (evidence is None or not _squash(evidence)
+                    or not any(_names(evidence, end) for end in others)):
+                # An end absent from the window (the author, read from "we")
+                # takes the other end's place rather than the window's start.
+                h, t = text.find(head), text.find(tail)
+                h, t = (h if h >= 0 else t), (t if t >= 0 else h)
+                evidence = _evidence_for(text, max(h, 0), max(t, 0), (head, tail))
             proposals.append(RelationProposal(
                 source_surface=head, target_surface=tail, relation=stored_relation(name),
                 evidence=evidence, confidence=CONFIDENCE,
