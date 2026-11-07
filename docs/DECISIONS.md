@@ -1358,8 +1358,8 @@ CAVA's supplier, Spark's general partners as investors in their own funds). But
 managers from `leads`, trustees from `member_of`.
 
 Gold-window probe, facts kept by the gate, D38 vs trial: GreenGrid 7 / 7,
-Anthropic 52 / 49, CoreWeave 52 / 51, CAVA 75 / 76 (440k tokens for both
-probes). The Anthropic drop is the four Public Benefit Fund managers, keyed as
+Anthropic 52 / 49, CoreWeave 52 / 51, CAVA 75 / 76 (292k tokens for the
+trial probe). The Anthropic drop is the four Public Benefit Fund managers, keyed as
 `LEADS` and now read as `MANAGES`; the other moves are within the noise of
 quote choice.
 
