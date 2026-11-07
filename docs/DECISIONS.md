@@ -1165,7 +1165,7 @@ falls well short, this recommendation should be revisited.
 
 ## D36 — A held-out filing for `llm_ie`, with its key and rule fixed before the run
 
-**Status:** rule proposed by the assistant, open to change until the run starts ·
+**Status:** run; all three bars passed ·
 **Date:** 2026-11-04
 
 **Context.** D35 made `llm_ie` the recommended setup for SEC filings with no
@@ -1193,3 +1193,39 @@ automatically, because no alternative has been run on this filing.
 but with no baseline for this filing. A sample of 40 carries about ±14 points.
 The same assistant wrote the wording and the key and will judge the sample, so a
 spot check by someone else would strengthen the result.
+
+**Result (2026-11-07, `entity_graph_cava_s1`, gold and rule unchanged).** All
+three bars pass, so the D35 recommendation stands.
+
+| Measure | Bar | Result |
+|---|---|---|
+| Recall (`eval`) | 66/88 (75%) | 71/88 (80.7%) |
+| Strict precision, 40 non-gold edges | 26/40 (65%) | 33/40 (82.5%); 30/40 with three borderline items counted wrong |
+| Lenient precision | — | 39/40 (97.5%) |
+| Trap edges leaked | ≤ 2 of 7 | 0 |
+
+235 promoted edges. 1,219 windows, 1 failed (malformed JSON), 1.52M tokens,
+about 10 minutes end to end (a shorter filing than the other two, on a quiet
+router).
+
+The 17 misses fall into three groups:
+
+- **Not proposed (9):** Citigroup, Piper Sandler and William Blair as
+  underwriters (the last two appear only in a table), Act III Management and CMRG
+  as advisors, the Hamman suit, CAVA Mezze Grill as a subsidiary, the Laurel
+  facility, and Shaich leading Panera (proposed as founder, employee and member
+  instead).
+- **Proposed, rejected by the gate (6):** the three committee chairs, read as
+  forecasts ("will serve as the chair"; the same sentences' plain memberships
+  were promoted), J.P. Morgan and Jefferies as underwriters (assertion 0.37 and
+  0.53 but modality `not_stated`), and Xenohristos founding CAVA Mezze (failed
+  the entity-type check).
+- **Promoted under another name (2):** both T. Rowe Price subsidiary facts were
+  promoted, but resolution merged T. Rowe Price Associates and T. Rowe Price
+  Group into the investor "T. Rowe Price", so they don't match the key.
+
+Strict precision errors were generic endpoints ("the Company", "revocable
+trust") and fund managers read as employees rather than leaders, which is one of
+the boundaries D35 states. Underwriters are the one systematic gap: none of the
+five was promoted, where both earlier filings found theirs. Nothing was changed
+in response to this run.
