@@ -1255,3 +1255,33 @@ that never reaches a name.
 precision sample probably share this cause, but that is unchecked; a full rerun
 would cost about 1.5M tokens. CAVA has been seen, so a rerun would confirm the
 fix, not stand as held-out evidence, and D36's recorded result stays as it is.
+
+**Rerun (2026-11-07, `entity_graph_cava_s1_v2`, same key and settings).** The fix
+works at extraction but did not raise recall:
+
+| | D36 run | With D37 |
+|---|---|---|
+| Recall | 71/88 | 67/88 |
+| Strict / lenient precision (40 non-gold edges) | 82.5% / 97.5% | 82.5% / 95% |
+| Promoted edges | 235 | 310 |
+| Edges on "the Company" / "revocable trust" | 6 | 2 |
+| Trap leaks | 0 | 0 |
+
+- **Underwriters:** now proposed (8 firms, 2–3 quotes each), but only Citigroup
+  passed the gate. The other quotes do not name the firm ("The underwriters are
+  committed to purchase all the common shares offered by us"), so the gate read
+  them as `not_stated`, correctly. The quote stating the role ("J.P. Morgan
+  Securities LLC, Jefferies LLC and Citigroup … are acting as representatives")
+  was attached to Citigroup only.
+- **Gained:** Citigroup as underwriter, the Laurel facility, Xenohristos founding
+  CAVA Mezze; CAVA Mezze Grill as a subsidiary was promoted but merged into "CAVA
+  Mezze" at resolution.
+- **Lost:** five committee memberships and two Act III facts. The committee
+  quotes now carried "we expect to have … who will serve as the chair", which the
+  gate read as a forecast; in the D36 run shorter quotes from the same sentences
+  passed. This is run-to-run variation in quote choice, not the fix, and makes
+  the 4-fact drop hard to read: no run has been repeated, so its noise is unknown.
+
+The fix stays: it is correct on its face and removed most generic endpoints. The
+underwriter gap that remains is quote choice: a relation can carry quotes that
+name neither end.
