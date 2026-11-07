@@ -22,6 +22,18 @@ def test_finds_both_filing_definitions() -> None:
     assert (an.name, an.short) == ("Anthropic, PBC", "Anthropic")
 
 
+def test_definition_with_words_before_the_name() -> None:
+    # CAVA S-1 wording: "mean the business of" kept every "we" unresolved (D37).
+    ref = find_self_reference("•the “Company,” “we,” “us,” and “our” mean the business of "
+                              "CAVA Group, Inc. and its subsidiaries;")
+    assert (ref.name, ref.short) == ("CAVA Group, Inc.", "CAVA Group")
+    ref = find_self_reference("the terms “we,” “us,” and “our” refer to the combined "
+                              "business of Acme Holdings, Inc. and its subsidiaries")
+    assert ref.name == "Acme Holdings, Inc."
+    # Lowercase words that never reach a capitalized name still match nothing.
+    assert find_self_reference("“we,” “us” and “our” mean the people who wrote this") is None
+
+
 def test_documents_without_a_definition_are_left_alone() -> None:
     assert find_self_reference("We met GreenGrid in Berlin. Our view is that it grew.") is None
     # Quoted defined terms that do not include we/us/our are D24's business.

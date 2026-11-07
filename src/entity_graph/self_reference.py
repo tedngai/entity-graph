@@ -27,10 +27,12 @@ from dataclasses import dataclass
 
 _QUOTE = r"[\"“]([^\"“”\n]{1,40}?)[,.]?[\"”]"
 _SEP = r"[\s,]*(?:(?:and|or)\s+)?(?:the\s+)?"
-# A run of two or more quoted terms, then "refer(s) to" / "mean(s)" and a name.
+# A run of two or more quoted terms, then "refer(s) to" / "mean(s)", up to four
+# lowercase words ("mean the business of", "refer to the combined business of"),
+# and a name.
 _DEFINITION = re.compile(
     rf"(?P<terms>(?:{_QUOTE}{_SEP}){{2,}})"
-    r"[^.;\n\"“”]{0,60}?\b(?:refers?\s+to|means?)\s+"
+    r"[^.;\n\"“”]{0,60}?\b(?:refers?\s+to|means?)\s+(?:[a-z]+\s+){0,4}?"
     r"(?P<name>[A-Z][\w&’'.-]*(?:,?\s+(?:[A-Z][\w&’'.-]*|Inc\.?|LLC|PBC|plc|L\.P\.))*)"
 )
 _TERM = re.compile(_QUOTE)

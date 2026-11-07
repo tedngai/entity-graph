@@ -1229,3 +1229,29 @@ trust") and fund managers read as employees rather than leaders, which is one of
 the boundaries D35 states. Underwriters are the one systematic gap: none of the
 five was promoted, where both earlier filings found theirs. Nothing was changed
 in response to this run.
+
+## D37 — Self-reference definitions with words before the name
+
+**Status:** accepted · **Date:** 2026-11-07
+
+**Context.** D36's run promoted none of CAVA's five underwriters. The
+Underwriting section was read, not skipped, but returned no relations: it says
+"We are offering the shares … through a number of underwriters" and never names
+CAVA. D28's detector expects the name right after "refer to" or "mean"; CAVA
+defines its terms as "mean the business of CAVA Group, Inc.", so the filing had
+no self-reference and no "we" was tied to CAVA anywhere in it.
+
+**Decision.** Allow up to four lowercase words between "refer(s) to" / "mean(s)"
+and the name. The rest of the rule is unchanged: two or more quoted terms
+including we, us or our, then a capitalized name.
+
+**Why.** Rerunning `llm_ie` on CAVA's two underwriting windows: without the
+self-reference, 0 relations each; with it, all 8 underwriters to CAVA Group in
+each (6,800 tokens). CoreWeave and Anthropic resolve exactly as before, and the
+GreenGrid sample still has none. A unit test covers both wordings and a phrase
+that never reaches a name.
+
+**Consequences.** Other CAVA misses and the "the Company" endpoints in its
+precision sample probably share this cause, but that is unchecked; a full rerun
+would cost about 1.5M tokens. CAVA has been seen, so a rerun would confirm the
+fix, not stand as held-out evidence, and D36's recorded result stays as it is.
