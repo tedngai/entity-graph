@@ -94,7 +94,9 @@ def convert(doc: dict, index: dict, doc_name: str) -> tuple[str, list[dict], lis
                 fitted.append((spec, head, tail, inverse))
         tally.append((kind(types[h], types[t]), pid, bool(fitted)))
         for spec, head, tail, inverse in fitted:
-            key = (head, spec.name, tail)
+            # A symmetric fact is labelled both ways round; keep it once.
+            key = (min(head, tail), spec.name, max(head, tail)) if spec.symmetric else (
+                head, spec.name, tail)
             if key in seen:
                 continue
             seen.add(key)
@@ -136,6 +138,9 @@ def main() -> None:
     parser.add_argument("--sample", type=int, default=0, help="articles to sample (0 = all)")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--modules", default="", help="comma-separated schema modules (default all)")
+    parser.add_argument("--require", default="",
+                        help="sample only articles with an in-schema fact of these relations "
+                             "(comma-separated, e.g. EDUCATED_AT,SPOUSE_OF)")
     args = parser.parse_args()
 
     docs = json.loads(Path(args.input).read_text(encoding="utf-8"))
@@ -149,8 +154,13 @@ def main() -> None:
 
     if not (args.out_text and args.out_gold):
         return
-    chosen = sorted(random.Random(args.seed).sample(range(len(docs)), args.sample)
-                    if args.sample else range(len(docs)))
+    pool = range(len(docs))
+    required = {r.strip().upper() for r in args.require.split(",") if r.strip()}
+    if required:
+        pool = [i for i in pool
+                if required & {f["relation"] for f in convert(docs[i], index, "x")[1]}]
+    chosen = sorted(random.Random(args.seed).sample(list(pool), min(args.sample, len(pool)))
+                    if args.sample else pool)
     doc_name = Path(args.out_text).name
     texts, gold, tally = [], [], []
     for i in chosen:

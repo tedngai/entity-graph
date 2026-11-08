@@ -1547,3 +1547,58 @@ spanning windows, no demonym end), recall is 26 to 33 of 95 (27 to 35%).
   recall on it should be read with that in mind.
 - A leading "the" is not dropped when names are compared ("the United
   States"); that is a general matching / resolution question, not a DocRED one.
+
+## D43 — Trial: family and `educated_at` in the core module
+
+**Status:** trial, not adopted · **Date:** 2026-11-07
+
+**Context.** On Re-DocRED the largest gaps between people and organizations
+are family (378 facts) and education (90) (D42); the standards share both
+(D41: ACE PER-SOC.Family and ORG-AFF.Student-Alum, TAC KBP per:spouse /
+children / siblings / schools_attended, Wikidata P26 / P40 / P22 / P25 / P3373
+/ P69, schema.org).
+
+**Trial.** Four core relations, appended to the registry (uncommitted while
+on trial):
+
+- `spouse_of` (person, person; symmetric): married to each other.
+- `parent_of` (person -> person): mother or father of. Wikidata `P40`, `^P22`,
+  `^P25`.
+- `sibling_of` (person, person; symmetric): brothers or sisters.
+- `educated_at` (person -> organization): studied at, attended or graduated
+  from a school, college or university; teaching there is `works_for`.
+
+`scripts/redocred_gold.py` gained `--require` (sample only articles with a
+fact of the named relations) and keeps a symmetric fact once.
+
+**Coverage (no model).** Re-DocRED facts in the core schema 2,024 / 17,448;
+between people and organizations 930 / 1,909 (49%, was 23%).
+
+**Probe** (LLM-only with the gate; 272 extraction calls, 329k prompt + 125k
+completion tokens):
+
+| Gold set | Facts kept, D38 | Facts kept, trial |
+|---|---|---|
+| GreenGrid | 7 / 9 | 7 / 9 |
+| Anthropic S-1 | 52 / 60 | 53 / 60 |
+| CoreWeave S-1 | 52 / 54 | 52 / 54 |
+| CAVA S-1 | 75 / 88 | 73 / 88 |
+| Re-DocRED sample (50 articles) | 33 proposed / 166 (D42) | 48 proposed / 178, 44 kept |
+| Re-DocRED family / education (40 articles) | n/a | 81 proposed / 298, 80 kept |
+
+New relations on the 40 articles, facts whose evidence lies in one window:
+`spouse_of` 8 / 16, `parent_of` 20 / 53, `educated_at` 10 / 20, `sibling_of`
+8 / 34. Re-DocRED infers many siblings from shared parents ("his sons A and B"),
+which the prompt skips as inference.
+
+**Reading.**
+
+- No regression beyond noise on the four existing sets. The CAVA moves are
+  quote-level flips (Robert Bertram, Crazy Feta lost; Ronald Shaich gained).
+- Run-to-run noise is large: on the 50-article sample, the facts the trial
+  does not touch went from 33 to 42 found (12 gained, 3 lost) with no change
+  to their relations. Differences of a few facts are not attributable.
+- The gate keeps almost every matched family or education proposal (80 / 81).
+  Precision of unmatched proposals is not measured; in filings, every
+  director's degrees will now become `EDUCATED_AT` edges.
+- The GLiNER backend also gets the four labels, untested.
