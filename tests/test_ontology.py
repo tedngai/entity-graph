@@ -76,3 +76,16 @@ def test_relations_for_keeps_registry_order_and_rejects_unknown_modules() -> Non
     assert relations_for(("core",)) == RELATION_SPECS
     with pytest.raises(ValueError):
         relations_for(("core", "astrology"))
+
+
+def test_standard_terms_name_a_known_standard_and_wikidata_ids_are_properties() -> None:
+    import re
+
+    from entity_graph.extract.ontology import RELATION_REGISTRY
+
+    known = {"ACE2005", "TAC-KBP", "Wikidata", "schema.org", "FIBO"}
+    for spec in RELATION_REGISTRY:
+        for standard, term in spec.maps:
+            assert standard in known
+            if standard == "Wikidata":
+                assert re.fullmatch(r"\^?P\d+", term), (spec.name, term)

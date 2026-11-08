@@ -1419,3 +1419,39 @@ modules). Stored relation names, the database and the gold sets are unchanged.
 added once to the registry and every profile with that module gets it.
 Entity types are still per profile; folding them into the same scheme, event
 nodes, per-window module choice and an "other" fallback are later steps.
+
+## D41 — Map the registry to standards; gaps come from the standards
+
+**Status:** adopted (mapping only; no relation added) · **Date:** 2026-11-07
+
+**Context.** D40 gave every relation a place for its terms in outside
+standards. Gaps were still found by failed evaluations, which sees only what
+a gold set happens to contain.
+
+**Decision.** `docs/SCHEMA_MAPPING.md` lays the registry against ACE 2005,
+TAC KBP, Wikidata, schema.org, FIBO and SEM / CIDOC-CRM, and lists what the
+standards define that the registry lacks; the registry's `maps` carry the
+clear matches (Wikidata IDs checked against the Wikidata API). Findings:
+
+- All 9 core relations map to ACE, TAC KBP or Wikidata, so the core already
+  is the shared general set. `supplies`, `advisor_to`, `underwriter_of` and
+  the politics relations have no standard match: they are domain relations,
+  defined by their meanings and the gold sets.
+- Core candidates the standards share and the registry lacks: family
+  (`spouse_of`, `parent_of`, `sibling_of`; the registry has no person-person
+  relation), `educated_at`, `born_in`, `owns`, and widening `member_of` and
+  `founded` to organization heads.
+- Module candidates: `events` (`participated_in`, `organized`; SEM / CIDOC /
+  Wikidata P1344, P710, P664), `research` (`authored`, `funded`), `succeeded`
+  for politics.
+- Not relations: time on edges (Wikidata P580 / P582 / P585; the graph keeps
+  none, so "former director" and "director" are one edge) and document
+  metadata (Dublin Core, for the documents table).
+
+**Verification.** Metadata only: the schema snapshot (prompts, labels, legal
+relations) is byte-identical to before D40; tests pass; no LLM tokens.
+
+**Consequences.** Every candidate changes the prompt, so none is adopted
+without a probe on all gold sets. Measuring the general candidates needs a
+gold set outside filings; DocRED (Wikidata-labelled) is the candidate,
+coverage and licence unchecked.
