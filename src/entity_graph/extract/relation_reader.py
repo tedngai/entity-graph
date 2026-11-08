@@ -23,43 +23,15 @@ from ..config import load_config
 from .base import Mention, RelationProposal
 from .gliner_extractor import _evidence_for
 from .llm import LlmExtractor, parse_json_object
-from .ontology import Ontology, RelationSpec, stored_relation
+from .ontology import RELATION_REGISTRY, Ontology, RelationSpec, stored_relation
 
 log = logging.getLogger(__name__)
 
-# What each relation means, head -> tail. GLiNER ignores descriptions; an LLM
-# needs the direction spelled out.
+# What each relation means, head -> tail, from the schema registry (D40).
+# GLiNER ignores descriptions; an LLM needs the direction spelled out. A
+# relation with no meaning is shown by its name.
 RELATION_MEANINGS: dict[str, str] = {
-    "works_for": "head is or was employed by, or holds or held an officer or staff role at, "
-                 "tail; a board seat alone is member_of, not works_for",
-    "located_in": "head is located, headquartered or has an office in tail; the state it is "
-                  "incorporated in does not count, and an address counts only for its owner",
-    "founded": "head founded or co-founded tail",
-    "leads": "head is the chief executive, president, chair, manager, managing member or head "
-             "of tail (including chair of a board committee); other officers (finance, "
-             "operations, science) are works_for, and heading a team inside tail is not "
-             "leading tail",
-    "partnered_with": "head and tail have a stated partnership or collaboration; a provider or "
-                      "customer with no stated partnership is supplies",
-    "acquired": "head acquired or agreed to acquire tail",
-    "invested_in": "head invested in, or holds equity bought in, tail, including a named "
-                   "beneficial owner of tail's stock",
-    "member_of": "head is a member, director or trustee of tail (a board, committee, company, "
-                 "trust or group)",
-    "subsidiary_of": "head is a subsidiary of, or wholly owned by, tail; a trust or fund that "
-                     "only holds shares or voting rights is not a subsidiary",
-    "supplies": "head sells or provides goods, services, capacity or facilities to tail, "
-                "including a customer named as such; lenders and agents of a loan are not "
-                "suppliers",
-    "sued": "head filed a lawsuit or claim against tail",
-    "underwriter_of": "head is an underwriter of tail's securities offering; arrangers and "
-                      "bookrunners of a loan are not underwriters",
-    "auditor_of": "head is the independent auditor (registered public accounting firm) of tail",
-    "advisor_to": "head advises tail, including as its legal counsel; lenders and agents of a "
-                  "loan are not advisors",
-    "develops": "head develops or makes tail",
-    "lends_to": "head lends money to tail, or is a lender, administrative agent, collateral "
-                "agent or arranger of a loan, credit facility or notes extended to tail",
+    spec.name: spec.meaning for spec in RELATION_REGISTRY if spec.meaning
 }
 
 # A biography often gives the title alone ("has served as a Trustee"); the

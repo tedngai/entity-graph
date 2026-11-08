@@ -4,7 +4,9 @@ One pipeline serves every document; a profile carries only what is specific
 to a kind of document:
 
 * the ontology — entity labels (with the descriptions GLiNER2.5 reads as
-  part of the question) and the typed relation set;
+  part of the question) and the schema modules its typed relations come
+  from (``RELATION_REGISTRY`` in ``extract/ontology.py``, D40), so a new
+  kind of document picks modules instead of defining relations;
 * windows to skip at extraction (boilerplate such as an exhibit index);
 * defaults for the gate profile and the excluded node types;
 * default curation hides — generic nouns that are never actors in this kind
@@ -25,9 +27,8 @@ from functools import lru_cache
 from .extract.ontology import (
     ENTITY_DESCRIPTIONS,
     LABEL_TO_TYPE,
-    RELATION_SPECS,
     Ontology,
-    RelationSpec,
+    relations_for,
 )
 
 
@@ -36,6 +37,8 @@ class DocumentProfile:
     name: str
     description: str
     ontology: Ontology
+    # The schema modules the ontology's relations come from (D40).
+    modules: tuple[str, ...] = ("core",)
     # A sentence window matching any of these is not extracted. Offsets are
     # untouched: the text is still stored and quoted, only not mined.
     skip_window_patterns: tuple[str, ...] = ()
@@ -54,10 +57,19 @@ def _compile(patterns: tuple[str, ...]) -> tuple[re.Pattern, ...]:
     return tuple(re.compile(pattern) for pattern in patterns)
 
 
-GENERAL = DocumentProfile(
-    name="general",
-    description="Default ontology; no skipped windows. Use for news, reports, memos.",
-    ontology=Ontology(dict(ENTITY_DESCRIPTIONS), dict(LABEL_TO_TYPE), RELATION_SPECS),
+def _profile(name: str, description: str, entities: dict[str, str], labels: dict[str, str],
+             modules: tuple[str, ...], **settings) -> DocumentProfile:
+    """A profile whose relations are the registry's relations in ``modules``."""
+    return DocumentProfile(
+        name=name, description=description,
+        ontology=Ontology(entities, labels, relations_for(modules)), modules=modules, **settings,
+    )
+
+
+GENERAL = _profile(
+    "general",
+    "Default ontology; no skipped windows. Use for news, reports, memos.",
+    dict(ENTITY_DESCRIPTIONS), dict(LABEL_TO_TYPE), ("core",),
     gold_path="data/gold/greengrid_partnership.jsonl",
 )
 
@@ -77,23 +89,14 @@ _SEC_ENTITIES = {
     "date": "Dates or years",
 }
 _SEC_LABELS = {**LABEL_TO_TYPE, "product": "PRODUCT"}
-_SEC_RELATIONS = RELATION_SPECS + (
-    RelationSpec("supplies", ("organization",), ("organization",)),
-    RelationSpec("sued", ("organization", "person"), ("organization", "person")),
-    RelationSpec("underwriter_of", ("organization",), ("organization",)),
-    RelationSpec("auditor_of", ("organization",), ("organization",)),
-    RelationSpec("advisor_to", ("organization", "person"), ("organization",)),
-    RelationSpec("develops", ("organization",), ("product",)),
-    # FIBO's lender/borrower distinction (D39): without it lenders and loan
-    # agents had no relation and landed on supplies or advisor_to.
-    RelationSpec("lends_to", ("organization",), ("organization",)),
-)
+_SEC_MODULES = ("core", "commerce", "finance", "legal")
+_SEC_RELATIONS = relations_for(_SEC_MODULES)
 
-SEC_FILING = DocumentProfile(
-    name="sec_filing",
-    description="SEC registration statements and reports: capital, governance, "
-                "commercial and legal relations; exhibit index and signatures skipped.",
-    ontology=Ontology(_SEC_ENTITIES, _SEC_LABELS, _SEC_RELATIONS),
+SEC_FILING = _profile(
+    "sec_filing",
+    "SEC registration statements and reports: capital, governance, "
+    "commercial and legal relations; exhibit index and signatures skipped.",
+    _SEC_ENTITIES, _SEC_LABELS, _SEC_MODULES,
     skip_window_patterns=(
         # Exhibit index rows, and link-dense windows (table of contents, image
         # galleries). One link is normal: every page repeats a "Table of
@@ -133,18 +136,14 @@ _HISTORY_ENTITIES = {
     "concept": "Abstract concepts, policies, or bonds that are not the types above",
     "date": "Dates or years",
 }
-_HISTORY_RELATIONS = RELATION_SPECS + (
-    RelationSpec(
-        "allied_with", ("person", "organization"), ("person", "organization"), symmetric=True
-    ),
-    RelationSpec("opposed", ("person", "organization"), ("person", "organization")),
-)
+_HISTORY_MODULES = ("core", "politics")
+_HISTORY_RELATIONS = relations_for(_HISTORY_MODULES)
 
-HISTORY_BOOK = DocumentProfile(
-    name="history_book",
-    description="Scholarly histories (often OCR): alliances and opposition between "
-                "people and institutions on top of the general relations.",
-    ontology=Ontology(_HISTORY_ENTITIES, dict(LABEL_TO_TYPE), _HISTORY_RELATIONS),
+HISTORY_BOOK = _profile(
+    "history_book",
+    "Scholarly histories (often OCR): alliances and opposition between "
+    "people and institutions on top of the general relations.",
+    _HISTORY_ENTITIES, dict(LABEL_TO_TYPE), _HISTORY_MODULES,
     # Generic institution nouns a history uses for many different bodies.
     default_hide=(
         "bank", "banks", "central bank", "finance", "banking", "labor",

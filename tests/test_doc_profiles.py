@@ -93,3 +93,11 @@ def test_sec_default_hides_keep_the_board() -> None:
     hides = {name.lower() for name in get_document_profile("sec_filing").default_hide}
     assert "directors" in hides
     assert "board of directors" not in hides
+
+
+def test_profiles_are_built_from_their_schema_modules() -> None:
+    from entity_graph.extract.ontology import relations_for
+
+    for profile in PROFILES.values():
+        assert "core" in profile.modules
+        assert profile.ontology.relation_specs == relations_for(profile.modules)

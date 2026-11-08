@@ -146,6 +146,7 @@ def main(argv: list[str] | None = None) -> int:
                 spec.name for spec in profile.ontology.relation_specs
             )
             print(f"{marker} {profile.name}: {profile.description}")
+            print(f"    modules: {', '.join(profile.modules)}")
             print(f"    relations: {relations}")
             print(f"    skipped-window patterns: {len(profile.skip_window_patterns)}  "
                   f"default hides: {len(profile.default_hide)}  "

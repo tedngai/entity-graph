@@ -1374,3 +1374,48 @@ trustee facts, a schema decision left to the user. Nothing is adopted yet.
 `lends_to`-only configuration has not been probed or run on its own (the trial
 measured both relations together), and the GLiNER backend now also sees the
 `lends_to` label, untested.
+
+## D40 — One relation registry; profiles choose schema modules
+
+**Status:** adopted · **Date:** 2026-11-07
+
+**Context.** The relation sets grew from evaluation failures: each profile
+copied the general relations and added its own (`sec_filing` after the
+Anthropic S-1, `lends_to` in D39), and the meanings an LLM reads lived in a
+separate dict in `relation_reader.py`. A new kind of document meant
+discovering a new list, and nothing tied a relation to an outside standard.
+The goal is a tool that handles any document type from a standard schema.
+
+**Decision.** Every relation is defined once, in `RELATION_REGISTRY`
+(`extract/ontology.py`), with its types, its meaning, a schema module, a parent
+group and its terms in outside standards:
+
+- **Modules** (`SCHEMA_MODULES`): `core` (relations any text can state),
+  `commerce`, `finance`, `legal`, `politics`. A profile is a choice of modules:
+  `general` = core; `sec_filing` = core, commerce, finance, legal;
+  `history_book` = core, politics. `relations_for(modules)` returns the
+  registry's relations in registry order, which is the order a model sees
+  them, so new relations go at the end.
+- **Groups** (`RELATION_GROUPS`): affiliation, ownership, commerce,
+  cooperation, conflict, location, creation. The hierarchy is metadata for
+  now; scoring partial credit against it is a later step.
+- **Maps**: ACE 2005 relation (or event) types, TAC KBP slots and Wikidata
+  properties where the match is clear; `^` marks an inverse (`founded` is
+  `^P112`, Wikidata's "founded by"). Relations with no clear match (`supplies`,
+  `lends_to`, `underwriter_of`, `auditor_of`, `advisor_to`, `partnered_with`,
+  `allied_with`, `opposed`) have none yet; a mapping review against ACE / TAC
+  KBP / Wikidata / FIBO / SEM is the next step.
+- `RELATION_MEANINGS` is now derived from the registry; `entity-graph profiles`
+  lists each profile's modules.
+
+**Verification.** A snapshot of everything the schema feeds (each profile's
+relation specs, JointIE labels and arguments, the reader's relation lines, the
+LLM-IE type lines and prompt, legal relations for every type pair, symmetric
+relations) is byte-identical before and after. No LLM tokens; 134 tests pass
+(three new: registry invariants, module composition, profiles built from their
+modules). Stored relation names, the database and the gold sets are unchanged.
+
+**Consequences.** A new document type picks modules; a missing relation is
+added once to the registry and every profile with that module gets it.
+Entity types are still per profile; folding them into the same scheme, event
+nodes, per-window module choice and an "other" fallback are later steps.

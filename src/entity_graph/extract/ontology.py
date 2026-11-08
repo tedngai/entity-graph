@@ -65,29 +65,157 @@ def display_relation(name: str) -> str:
 
 @dataclass(frozen=True)
 class RelationSpec:
-    """One typed relation. Head/tail are ontology labels, not stored types."""
+    """One typed relation. Head/tail are ontology labels, not stored types.
+
+    ``meaning`` is the head -> tail definition an LLM reads (GLiNER ignores
+    it). ``module`` is the schema module that carries the relation, ``group``
+    its parent in the relation hierarchy (``RELATION_GROUPS``), and ``maps``
+    its terms in outside standards as (standard, term) pairs; a term starting
+    with ``^`` is the inverse property (tail -> head). See DECISIONS.md D40.
+    """
 
     name: str
     head: tuple[str, ...]
     tail: tuple[str, ...]
     unique_head: bool = False
     symmetric: bool = False
+    meaning: str = ""
+    module: str = "core"
+    group: str = ""
+    maps: tuple[tuple[str, str], ...] = ()
 
 
-# Typed endpoints for the closed relation set the pipeline already used,
-# plus the constraints JointIE can enforce at decode time. ``works_for`` is
-# not unique_head: a person can have a current employer and a previous one.
-RELATION_SPECS: tuple[RelationSpec, ...] = (
-    RelationSpec("works_for", ("person",), ("organization",)),
-    RelationSpec("located_in", ("organization", "person", "event"), ("location",)),
-    RelationSpec("founded", ("person",), ("organization",)),
-    RelationSpec("leads", ("person",), ("organization",), unique_head=True),
-    RelationSpec("partnered_with", ("organization",), ("organization",), symmetric=True),
-    RelationSpec("acquired", ("organization",), ("organization",)),
-    RelationSpec("invested_in", ("organization",), ("organization",)),
-    RelationSpec("member_of", ("person",), ("organization",)),
-    RelationSpec("subsidiary_of", ("organization",), ("organization",), unique_head=True),
+# Parents in the relation hierarchy. A relation's group is what a reader can
+# still be credited with when it picks a sibling, and what a document type
+# with no module of its own falls back on.
+RELATION_GROUPS: dict[str, str] = {
+    "affiliation": "a person's tie to an organization: employment, office, membership, "
+                   "founding (ACE ORG-AFF)",
+    "ownership": "control or equity between organizations: parent, acquirer, shareholder",
+    "commerce": "goods, services or money provided by one organization to another",
+    "cooperation": "a stated partnership or alliance, either way round",
+    "conflict": "a lawsuit or stated opposition",
+    "location": "where an entity is",
+    "creation": "who makes or develops a product",
+}
+
+# Schema modules. A document profile is a choice of modules; ``core`` holds
+# the relations any text can state. The order of RELATION_REGISTRY is the
+# order relations are listed to a model, so new relations go at the end.
+SCHEMA_MODULES: dict[str, str] = {
+    "core": "relations between people, organizations and places that any text can state",
+    "commerce": "suppliers, customers, advisors and products",
+    "finance": "lending, underwriting and auditing (FIBO's financial roles)",
+    "legal": "litigation",
+    "politics": "alliances and opposition between people and institutions",
+}
+
+_ACE, _KBP, _WD = "ACE2005", "TAC-KBP", "Wikidata"
+
+# Every relation any profile can use, defined once. ``works_for`` is not
+# unique_head: a person can have a current employer and a previous one.
+RELATION_REGISTRY: tuple[RelationSpec, ...] = (
+    RelationSpec(
+        "works_for", ("person",), ("organization",), group="affiliation",
+        meaning="head is or was employed by, or holds or held an officer or staff role at, "
+                "tail; a board seat alone is member_of, not works_for",
+        maps=((_ACE, "ORG-AFF.Employment"), (_KBP, "per:employee_or_member_of"),
+              (_WD, "P108"))),
+    RelationSpec(
+        "located_in", ("organization", "person", "event"), ("location",), group="location",
+        meaning="head is located, headquartered or has an office in tail; the state it is "
+                "incorporated in does not count, and an address counts only for its owner",
+        maps=((_ACE, "PHYS.Located"), (_ACE, "GEN-AFF.Org-Location"), (_WD, "P276"))),
+    RelationSpec(
+        "founded", ("person",), ("organization",), group="affiliation",
+        meaning="head founded or co-founded tail",
+        maps=((_ACE, "ORG-AFF.Founder"), (_KBP, "^org:founded_by"), (_WD, "^P112"))),
+    RelationSpec(
+        "leads", ("person",), ("organization",), unique_head=True, group="affiliation",
+        meaning="head is the chief executive, president, chair, manager, managing member or "
+                "head of tail (including chair of a board committee); other officers "
+                "(finance, operations, science) are works_for, and heading a team inside tail "
+                "is not leading tail",
+        maps=((_ACE, "ORG-AFF.Employment"), (_KBP, "^org:top_members_employees"),
+              (_WD, "^P169"), (_WD, "^P488"))),
+    RelationSpec(
+        "partnered_with", ("organization",), ("organization",), symmetric=True,
+        group="cooperation",
+        meaning="head and tail have a stated partnership or collaboration; a provider or "
+                "customer with no stated partnership is supplies"),
+    RelationSpec(
+        "acquired", ("organization",), ("organization",), group="ownership",
+        meaning="head acquired or agreed to acquire tail",
+        maps=((_ACE, "event:Business.Merge-Org"),)),
+    RelationSpec(
+        "invested_in", ("organization",), ("organization",), group="ownership",
+        meaning="head invested in, or holds equity bought in, tail, including a named "
+                "beneficial owner of tail's stock",
+        maps=((_ACE, "ORG-AFF.Investor-Shareholder"), (_KBP, "^org:shareholders"))),
+    RelationSpec(
+        "member_of", ("person",), ("organization",), group="affiliation",
+        meaning="head is a member, director or trustee of tail (a board, committee, company, "
+                "trust or group)",
+        maps=((_ACE, "ORG-AFF.Membership"), (_KBP, "per:employee_or_member_of"),
+              (_WD, "P463"))),
+    RelationSpec(
+        "subsidiary_of", ("organization",), ("organization",), unique_head=True,
+        group="ownership",
+        meaning="head is a subsidiary of, or wholly owned by, tail; a trust or fund that only "
+                "holds shares or voting rights is not a subsidiary",
+        maps=((_ACE, "PART-WHOLE.Subsidiary"), (_KBP, "org:parents"), (_WD, "P749"))),
+    RelationSpec(
+        "supplies", ("organization",), ("organization",), module="commerce", group="commerce",
+        meaning="head sells or provides goods, services, capacity or facilities to tail, "
+                "including a customer named as such; lenders and agents of a loan are not "
+                "suppliers"),
+    RelationSpec(
+        "sued", ("organization", "person"), ("organization", "person"), module="legal",
+        group="conflict",
+        meaning="head filed a lawsuit or claim against tail",
+        maps=((_ACE, "event:Justice.Sue"),)),
+    RelationSpec(
+        "underwriter_of", ("organization",), ("organization",), module="finance",
+        group="commerce",
+        meaning="head is an underwriter of tail's securities offering; arrangers and "
+                "bookrunners of a loan are not underwriters"),
+    RelationSpec(
+        "auditor_of", ("organization",), ("organization",), module="finance", group="commerce",
+        meaning="head is the independent auditor (registered public accounting firm) of tail"),
+    RelationSpec(
+        "advisor_to", ("organization", "person"), ("organization",), module="commerce",
+        group="commerce",
+        meaning="head advises tail, including as its legal counsel; lenders and agents of a "
+                "loan are not advisors"),
+    RelationSpec(
+        "develops", ("organization",), ("product",), module="commerce", group="creation",
+        meaning="head develops or makes tail",
+        maps=((_ACE, "ART.User-Owner-Inventor-Manufacturer"), (_WD, "^P178"))),
+    # FIBO's lender/borrower distinction (D39): without it lenders and loan
+    # agents had no relation and landed on supplies or advisor_to.
+    RelationSpec(
+        "lends_to", ("organization",), ("organization",), module="finance", group="commerce",
+        meaning="head lends money to tail, or is a lender, administrative agent, collateral "
+                "agent or arranger of a loan, credit facility or notes extended to tail"),
+    RelationSpec(
+        "allied_with", ("person", "organization"), ("person", "organization"), symmetric=True,
+        module="politics", group="cooperation"),
+    RelationSpec(
+        "opposed", ("person", "organization"), ("person", "organization"), module="politics",
+        group="conflict"),
 )
+
+
+def relations_for(modules: tuple[str, ...]) -> tuple[RelationSpec, ...]:
+    """The registry's relations in ``modules``, in registry order. Unknown modules raise."""
+    unknown = set(modules) - set(SCHEMA_MODULES)
+    if unknown:
+        raise ValueError(f"Unknown schema module(s): {', '.join(sorted(unknown))}")
+    return tuple(spec for spec in RELATION_REGISTRY if spec.module in modules)
+
+
+# The general ontology's relations: the core module.
+RELATION_SPECS: tuple[RelationSpec, ...] = relations_for(("core",))
 
 @dataclass(frozen=True)
 class Ontology:

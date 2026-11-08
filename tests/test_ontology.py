@@ -48,3 +48,31 @@ def test_symmetric_relations_have_one_canonical_order() -> None:
     assert canonical_pair("PARTNERED_WITH", "Google", "Anthropic") is True
     assert canonical_pair("PARTNERED_WITH", "Anthropic", "Google") is False
     assert canonical_pair("ACQUIRED", "Google", "Anthropic") is False
+
+
+def test_registry_defines_each_relation_once_with_a_known_module_and_group() -> None:
+    from entity_graph.extract.ontology import (
+        RELATION_GROUPS,
+        RELATION_REGISTRY,
+        SCHEMA_MODULES,
+    )
+
+    names = [spec.name for spec in RELATION_REGISTRY]
+    assert len(names) == len(set(names))
+    for spec in RELATION_REGISTRY:
+        assert spec.module in SCHEMA_MODULES
+        assert spec.group in RELATION_GROUPS
+        assert all(standard and term for standard, term in spec.maps)
+
+
+def test_relations_for_keeps_registry_order_and_rejects_unknown_modules() -> None:
+    import pytest
+
+    from entity_graph.extract.ontology import RELATION_REGISTRY, relations_for
+
+    chosen = relations_for(("finance", "core"))
+    assert [s for s in RELATION_REGISTRY if s in chosen] == list(chosen)
+    assert {s.module for s in chosen} == {"core", "finance"}
+    assert relations_for(("core",)) == RELATION_SPECS
+    with pytest.raises(ValueError):
+        relations_for(("core", "astrology"))
