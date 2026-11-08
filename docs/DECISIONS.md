@@ -1607,3 +1607,37 @@ so every profile has them: the general, filing and history prompts all list
 them from now on. The schema snapshot of D40 no longer applies (the prompts
 changed on purpose). Unmeasured: precision of unmatched family / education
 proposals, and the GLiNER backend with the four labels.
+
+## D44 — The probe reads windows naming both ends when no window holds the quote
+
+**Status:** adopted · **Date:** 2026-11-07
+
+**Context.** D42 counted 45 of 166 Re-DocRED misses as "evidence wider than
+one window". Measured without a model, each article chunked on its own as a
+real run would: 1,692 of 1,762 in-schema facts (96%) have both ends named in
+one window at the current size (8 sentences / 1,200 characters); 16 / 2,400
+reaches 100%. The rest are demonym ends, distant mentions, and 7 biographies
+naming their subject once at the top. The probe, though, only read windows
+holding a fact's whole quote; Re-DocRED quotes run from the first evidence
+sentence to the last, and the samples concatenate 50 articles, so many quotes
+fit no window.
+
+**Decision.** `probe()` keeps the windows that hold a gold quote and, for a
+quote no window holds, adds the windows that name both ends (any alias, whole
+word, any case). `format_probe` reports how many windows came by name. The four
+existing gold sets get exactly the same windows as before (every quote fits a
+window), so their probes are unchanged. Window size is unchanged.
+
+**Result** (LLM-only with the gate; 110 extraction calls, 115k prompt + 55k
+completion tokens):
+
+| Re-DocRED sample | Windows | Recall, D43 trial | Recall now | Kept by the gate |
+|---|---|---|---|---|
+| 50 articles | 46 -> 51 (5 by name) | 48 / 178 | 49 / 178 | 44 / 49 |
+| 40 family / education articles | 52 -> 59 (7 by name) | 81 / 298 | 83 / 298 | 82 / 83 |
+
+**Correction to D42's reading.** The fix gained three facts and lost none:
+most "evidence wider than one window" facts were already in windows the probe
+read for other facts, and were missed there. Windows are not the bottleneck.
+The misses are extraction: implicit or chained facts the prompt skips as
+inference, demonym ends, and names that differ from the gold names.

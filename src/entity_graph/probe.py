@@ -6,6 +6,10 @@ document exactly as ``extract`` does, keeps the windows that contain a gold
 evidence quote, runs the configured extractor on them, and scores the
 proposals against the gold facts. No database, no gate calls.
 
+A quote no window holds (wider than a window, or cut by a window boundary)
+falls back to the windows that name both of the fact's ends (D44): a full run
+reads every window, so those are the windows it could find the fact in.
+
 It measures proposal recall only: precision over a handful of windows says
 nothing about the whole document.
 """
@@ -27,6 +31,32 @@ def _flat(text: str) -> str:
     return _SPACE.sub(" ", text).strip()
 
 
+def _names(window: str, names: tuple[str, ...]) -> bool:
+    """Whether ``window`` names any of ``names`` as a whole word (any case)."""
+    return any(re.search(rf"(?<!\w){re.escape(name)}(?!\w)", window, re.IGNORECASE)
+               for name in names if name)
+
+
+def _gold_windows(chunks: list, gold: list[GoldFact]) -> tuple[list, int]:
+    """The windows holding a gold quote, plus, for a quote no window holds,
+    the windows naming both ends; and how many came only from names."""
+    flat = [_flat(c.text) for c in chunks]
+    by_quote: set[int] = set()
+    by_name: set[int] = set()
+    for g in gold:
+        if not g.evidence:
+            continue
+        quote = _flat(g.evidence)
+        hits = {i for i, window in enumerate(flat) if quote in window}
+        if hits:
+            by_quote |= hits
+            continue
+        subject, obj = (g.subject, *g.subject_aliases), (g.object, *g.object_aliases)
+        by_name |= {i for i, window in enumerate(flat)
+                    if _names(window, subject) and _names(window, obj)}
+    return [chunks[i] for i in sorted(by_quote | by_name)], len(by_name - by_quote)
+
+
 @dataclass
 class ProbeResult:
     facts: list[GoldFact]
@@ -36,6 +66,9 @@ class ProbeResult:
     windows: int
     # Proposals matching a gold fact or trap: (proposal, gold item), for --gate.
     matched: list = field(default_factory=list)
+    # Windows read only because they name both ends of a fact whose quote no
+    # window holds (D44).
+    name_windows: int = 0
 
     @property
     def recall(self) -> float:
@@ -54,8 +87,7 @@ def probe(gold_path: str | Path, text: str, config: Config, extractor) -> ProbeR
         overlap=config.chunk_overlap_sentences,
         max_chars=config.chunk_max_chars,
     )
-    quotes = {_flat(g.evidence) for g in gold if g.evidence}
-    wanted = [c for c in chunks if any(q in _flat(c.text) for q in quotes)]
+    wanted, by_name = _gold_windows(chunks, gold)
     # Each window goes through extract_document, so any document-level step
     # it applies to a single window applies here too.
     ref = find_self_reference(text)
@@ -79,12 +111,15 @@ def probe(gold_path: str | Path, text: str, config: Config, extractor) -> ProbeR
         traps=traps,
         leaked=[any(matches(p, g) for p in predictions) for g in traps],
         windows=len(wanted),
+        name_windows=by_name,
     )
 
 
 def format_probe(result: ProbeResult, *, verbose: bool = False) -> str:
     lines = [
-        f"Probe: {result.windows} gold window(s); proposal recall "
+        f"Probe: {result.windows} gold window(s)"
+        + (f" ({result.name_windows} by name)" if result.name_windows else "")
+        + "; proposal recall "
         f"{sum(result.found)}/{len(result.facts)} ({result.recall:.0%}); "
         f"traps proposed {sum(result.leaked)}/{len(result.traps)}"
     ]
