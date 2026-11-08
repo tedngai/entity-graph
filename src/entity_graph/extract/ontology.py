@@ -169,7 +169,7 @@ RELATION_REGISTRY: tuple[RelationSpec, ...] = (
         meaning="head is a subsidiary of, or wholly owned by, tail; a trust or fund that only "
                 "holds shares or voting rights is not a subsidiary",
         maps=((_ACE, "PART-WHOLE.Subsidiary"), (_KBP, "org:parents"), (_WD, "P749"),
-              (_SO, "parentOrganization"))),
+              (_WD, "^P355"), (_SO, "parentOrganization"))),
     RelationSpec(
         "supplies", ("organization",), ("organization",), module="commerce", group="commerce",
         meaning="head sells or provides goods, services, capacity or facilities to tail, "

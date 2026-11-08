@@ -1455,3 +1455,55 @@ relations) is byte-identical to before D40; tests pass; no LLM tokens.
 without a probe on all gold sets. Measuring the general candidates needs a
 gold set outside filings; DocRED (Wikidata-labelled) is the candidate,
 coverage and licence unchecked.
+
+## D42 — Re-DocRED: a gold set outside filings, and the schema's coverage
+
+**Status:** adopted (coverage measured; sample not yet probed) · **Date:** 2026-11-07
+
+**Context.** Three of the four gold sets are S-1s, so nothing measured the
+registry on other kinds of text (D41). Re-DocRED (500 Wikipedia test
+articles, MIT, labels re-annotated for missed facts) labels every fact with a
+Wikidata property, which the registry now maps.
+
+**Decision.** `scripts/redocred_gold.py` converts Re-DocRED. A fact is in
+schema when its property maps to a registry relation (`^` = swapped ends) and
+its entity types fit the relation's head and tail. Entity types: PER person,
+ORG organization, LOC location, MISC product/concept (not event: MISC also
+covers creeks and buildings, which as "events" passed as located things), TIME
+date, NUM nothing. The article text is CC BY-SA, so it and the gold file live
+outside the repo (`../redocred/`). `subsidiary_of` gained `^P355` (has
+subsidiary) in its maps.
+
+**Coverage, all 500 articles (no model):** 1,669 of 17,448 facts (10%) are in
+schema.
+
+| Facts between | In schema | Largest gaps (Wikidata) |
+|---|---|---|
+| people / organizations | 437 / 1,909 (23%) | P361 / P527 part of / has part 158 each; family: P3373 sibling 118, P40 child 105, P26 spouse 80, P22 father 75; P69 educated at 90; P264 record label 76 |
+| actor and place | 1,094 / 3,558 (31%) | P17 country 834; P27 country of citizenship 757; P1001 applies to jurisdiction 217; P19 place of birth 101; P35 head of state 67, P6 head of government 66; P20 place of death 60 |
+| place and place | 0 / 6,127 | P131 located in admin. territory 2,920; P17 country 1,631; P150 contains 716 |
+| works / events (MISC) | 138 / 4,749 (3%) | P800 notable work 562; P175 performer 273; P1344 / P710 participant (of) 252 each |
+| dates / numbers | 0 / 1,105 | P577 publication date, P569 / P570 birth / death, P571 inception |
+
+**Findings.**
+
+- The standard's largest gaps between actors are the D41 core candidates:
+  family (378 facts, a fifth of actor-actor), `educated_at`, and part-of
+  between organizations or people (a band's members, an army's units).
+- Countries act: head of state / government (P35, P6) has a country as head,
+  but the ontology types countries as locations, so `leads` cannot take
+  them. ACE has a separate GPE type for this; the registry has none.
+- `located_in` excludes a location as head, so no geography (city in county
+  in country) is expressible: 6,127 facts. Whether a network tool needs a
+  `geography` module is open; it would help resolution more than the network.
+- Event participation (P1344, P710: 504) is the events module of D41.
+- Dates are attributes, not relations (time on edges, D41).
+
+**Sample.** 50 articles (seed 0): 1,667 facts, 176 in schema (LOCATED_IN 121,
+MEMBER_OF 13, WORKS_FOR 13, DEVELOPS 10, SUBSIDIARY_OF 8, LEADS 6, FOUNDED 5),
+every evidence quote verified verbatim in the text. Not probed yet.
+
+**Consequences.** Coverage is now measured by a standard instead of found by
+failures, and every candidate in D41 has a count. Re-DocRED's documents are
+short (about 8 sentences), so it tests extraction across topics, not
+long-document resolution.
