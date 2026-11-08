@@ -1641,3 +1641,31 @@ most "evidence wider than one window" facts were already in windows the probe
 read for other facts, and were missed there. Windows are not the bottleneck.
 The misses are extraction: implicit or chained facts the prompt skips as
 inference, demonym ends, and names that differ from the gold names.
+
+## D45 — Gold matching ignores a leading "the"
+
+**Status:** adopted · **Date:** 2026-11-07
+
+**Context.** D42 counted 26 Re-DocRED misses as "an end was not extracted
+under a gold name", with "the United States" vs "United States" as the
+example. Gold sets keep or drop the article by habit: CAVA's gold has "The
+Invus Group", "The Honest Company", "The George Washington University";
+GreenGrid's has "the European Investment Bank"; CoreWeave's traps have "The
+Blackstone Group".
+
+**Decision.** `eval_facts._norm`, used by the probe and `entity-graph eval`,
+drops a leading "the" (a whole word) after case-folding, so a name matches with
+or without it. Traps match the same way, so a leaked trap written without
+"The" now counts as leaked. Resolution is unchanged: it still relies on
+trigram similarity and the Jev check to join such names.
+
+**Result.** Re-scoring the saved D42 proposals (no model): 33 / 166 before and
+after. The extractor had "United States", "Norway" and the like among its
+entities for those facts but proposed no relation; they are "both ends
+extracted, no relation" misses, not name mismatches. D42's name-mismatch count
+was overstated by comparing against gold names without this rule.
+
+**Consequences.** Correct, general and free, but no measured gain. The
+Re-DocRED misses come down to what the extractor does not propose: implicit
+statements ("Japanese company Nintendo"), chained locations, inferred siblings,
+demonyms.

@@ -61,8 +61,12 @@ class Score:
 
 def _norm(text: str) -> str:
     # A trailing period is not part of the name: a span ending "Inc." at a
-    # sentence end is often stored as "Inc" ("Reddit, Inc" in the S-1).
-    return " ".join(text.casefold().replace("_", " ").split()).rstrip(".")
+    # sentence end is often stored as "Inc" ("Reddit, Inc" in the S-1). Nor is
+    # a leading "the" (D45): "the United States" and "United States", "The
+    # Invus Group" and "Invus Group" name the same thing, and a reader or a
+    # gold set keeps the article or drops it by habit.
+    name = " ".join(text.casefold().replace("_", " ").split()).rstrip(".")
+    return name[4:] if name.startswith("the ") else name
 
 
 def _names(canonical: str, aliases: tuple[str, ...]) -> set[str]:

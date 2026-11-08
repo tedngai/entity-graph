@@ -79,3 +79,20 @@ def test_trailing_period_does_not_block_a_match() -> None:
                     object="Anthropic", object_aliases=("Anthropic, PBC",), modality="fact",
                     role="fact")
     assert matches({"subject": "Reddit, Inc", "relation": "SUED", "object": "Anthropic, PBC"}, gold)
+
+
+def test_a_leading_the_does_not_block_a_match() -> None:
+    from entity_graph.eval_facts import GoldFact, matches
+
+    gold = GoldFact(doc="", subject="Sony Music", subject_aliases=(), relation="LOCATED_IN",
+                    object="the United States", object_aliases=(), modality="fact", role="fact")
+    assert matches({"subject": "Sony Music", "relation": "LOCATED_IN",
+                    "object": "United States"}, gold)
+    invus = GoldFact(doc="", subject="Invus Group", subject_aliases=(), relation="INVESTED_IN",
+                     object="CAVA", object_aliases=(), modality="fact", role="trap")
+    assert matches({"subject": "The Invus Group", "relation": "INVESTED_IN", "object": "CAVA"},
+                   invus)
+    # Only a whole leading word: "Theranos" is not "ranos".
+    theranos = GoldFact(doc="", subject="Theranos", subject_aliases=(), relation="SUED",
+                        object="ranos", object_aliases=(), modality="fact", role="fact")
+    assert not matches({"subject": "ranos", "relation": "SUED", "object": "ranos"}, theranos)
