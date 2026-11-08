@@ -1458,7 +1458,7 @@ coverage and licence unchecked.
 
 ## D42 — Re-DocRED: a gold set outside filings, and the schema's coverage
 
-**Status:** adopted (coverage measured; sample not yet probed) · **Date:** 2026-11-07
+**Status:** adopted (coverage measured; sample probed) · **Date:** 2026-11-07
 
 **Context.** Three of the four gold sets are S-1s, so nothing measured the
 registry on other kinds of text (D41). Re-DocRED (500 Wikipedia test
@@ -1501,9 +1501,49 @@ schema.
 
 **Sample.** 50 articles (seed 0): 1,667 facts, 176 in schema (LOCATED_IN 121,
 MEMBER_OF 13, WORKS_FOR 13, DEVELOPS 10, SUBSIDIARY_OF 8, LEADS 6, FOUNDED 5),
-every evidence quote verified verbatim in the text. Not probed yet.
+every evidence quote verified verbatim in the text.
 
 **Consequences.** Coverage is now measured by a standard instead of found by
 failures, and every candidate in D41 has a count. Re-DocRED's documents are
 short (about 8 sentences), so it tests extraction across topics, not
 long-document resolution.
+
+**Probe (2026-11-07).** The 50-article sample, `general` profile (core
+relations only, so the gold is rebuilt with `--modules core`: 166 facts),
+LLM-only extraction with the gate, same models as D35. 44 gold windows;
+proposal recall 33 / 166 (20%); the gate kept 29 of the 33. The extractor made
+78 proposals in all, under two per window. Extraction used 62k tokens per run
+(41.7k prompt, 20.5k completion); it ran three times (one result lost to a
+console-encoding crash, one rerun to save every proposal), with identical
+usage counts each time.
+
+Where the 166 gold facts went (from the saved proposals; by my matching, which
+finds 26 rather than 33):
+
+| | Facts |
+|---|---|
+| Found | 26 |
+| Evidence spans more than one window, so window extraction cannot see the pair together | 45 |
+| One end is a demonym ("British", "American", "Emirati"), which DocRED links to the country | 26 |
+| An end was not extracted under a gold name ("the United States" vs "United States"; "Chicago" inside "Chicago's Hyde Park community") | 26 |
+| Both ends extracted, no relation proposed | 42 |
+| Another relation proposed (Columbia Legacy PARTNERED_WITH Sony Music) | 1 |
+
+The "no relation" facts are mostly implicit or chained statements DocRED
+counts and the prompt tells the model to skip as inference: an organization
+in the county and country of the village it is in, "Japanese company
+Nintendo" as Nintendo LOCATED_IN Japan, a teacher named only as whom a
+student studied with. Against the 95 facts a window reader could reach (not
+spanning windows, no demonym end), recall is 26 to 33 of 95 (27 to 35%).
+
+**What the probe says.**
+
+- On encyclopedia text, the schema is the first limit (10% of facts
+  expressible); extraction is the second.
+- Window-only extraction misses document-level facts: 45 of 166 in-schema
+  facts (27%) have evidence wider than one window.
+- DocRED's conventions (demonyms as countries, chained locations, implied
+  employment) differ from the pipeline's "stated, not inferred" rule; any
+  recall on it should be read with that in mind.
+- A leading "the" is not dropped when names are compared ("the United
+  States"); that is a general matching / resolution question, not a DocRED one.
