@@ -1707,3 +1707,60 @@ D43. No proposal read a state of incorporation as a location. Not adopted.
 windows alone). Each filing prompt's relation definitions are about half its
 characters (sec_filing: 2,973 of about 5,800), which is what choosing modules
 per window would shrink.
+
+## D47 — Cue words choose which relations a window's prompt lists
+
+**Status:** trial; setting added, off by default · **Date:** 2026-11-08
+
+**Context.** Relation definitions are about half of each filing prompt
+(sec_filing: 2,974 of about 5,800 characters, D46), and every window lists all
+20 relations, including underwriting, auditing and family relations that most
+windows cannot state. Choosing schema modules per window would shorten prompts,
+but the module is not the right unit: family and education are core relations
+(D43) yet just as marked by vocabulary as underwriting.
+
+**Decision.** `RelationSpec.cues` lists words a text uses when it states the
+relation (whole words or phrases, any case; a trailing `*` matches a word
+start), written from each relation's meaning, never from gold text. With
+`RELATION_CUES=on`, the LLM-only extractor and the relation reader list a
+relation with cues only in windows holding one. Relations without cues (the 9
+core relations) are always listed. Answers may still use any of the profile's
+relations. Every relation outside the core has cues (a test checks this), as do
+the family relations and `educated_at`. JointIE/GLiNER decoding is unchanged.
+
+**Offline measure** (no model). Across whole documents, prompts get shorter:
+
+| Document | Windows | Prompt characters per window, off -> on |
+|---|---|---|
+| Anthropic S-1 | 3,566 | 5,576 -> 4,404 (21% less) |
+| CoreWeave S-1 | 1,798 | 5,898 -> 4,807 (18% less) |
+| CAVA S-1 | 1,219 | 5,920 -> 4,805 (19% less) |
+| Re-DocRED, 50 articles | 73 | 4,682 -> 4,361 (7% less) |
+| Re-DocRED, family / education | 64 | 4,624 -> 4,457 (4% less) |
+
+On the probe's gold windows, which are dense in relations, the cut is 14%
+(16-22% on the S-1s). Of the gold facts whose relation has cues, one would lose
+its relation from every window the probe reads: a Re-DocRED `parent_of` inferred
+from "charters of kings Robert II and Robert III", which no kin word states.
+
+**Probe** (all six gold sets, LLM-only with the gate; 284 extraction calls,
+295k prompt + 131k completion tokens; D46's run of the same windows used 362k +
+132k with one extra prompt sentence):
+
+| Gold set | Found / kept, current | Found / kept, cues on |
+|---|---|---|
+| GreenGrid | 8 / 7 | 8 / 7 |
+| Anthropic S-1 | 54 / 53 | 54 / 54 |
+| CoreWeave S-1 | 53 / 52 | 54 / 53 |
+| CAVA S-1 | 82 / 73 | 82 / 74 |
+| Re-DocRED, 50 articles | 49 / 44 | 42 / 40 |
+| Re-DocRED, 40 family / education | 83 / 82 | 77 / 76 |
+
+**Reading.** The filing sets, where the saving is, held or gained. The
+Re-DocRED drops are within the spread of earlier runs (41-49 and 77-89 found)
+and do not come from hidden relations: the 50-article losses are mostly
+`located_in` (6), which is always listed, and every lost family or education
+fact's earlier evidence holds a cue word, so its relation was listed. Two of
+those windows (the Savoy and Herlin articles, 5 lost `parent_of` facts) sent
+byte-identical prompts with cues on and off. Completion tokens did not change:
+the saving is in prompt tokens only.

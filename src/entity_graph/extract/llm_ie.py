@@ -65,8 +65,9 @@ class LlmIeExtractor(RelationReader):
     concurrent = True
     reads_self_reference = True
 
-    def __init__(self, ontology: Ontology, llm: LlmExtractor | None = None) -> None:
-        super().__init__(ontology, llm)
+    def __init__(self, ontology: Ontology, llm: LlmExtractor | None = None,
+                 cues: bool | None = None) -> None:
+        super().__init__(ontology, llm, cues)
         self.label_to_type = dict(ontology.label_to_type)
         self.descriptions = dict(ontology.entity_descriptions)
 
@@ -78,7 +79,7 @@ class LlmIeExtractor(RelationReader):
                 self_terms: tuple[str, ...] = ()) -> ExtractionResult:
         prompt = USER_PROMPT.format(
             self_reference=self._self_reference(self_name, self_terms),
-            types=self._type_lines(), relations=self._relation_lines(),
+            types=self._type_lines(), relations=self._relation_lines(text),
             self_name=self_name or "the author", split_ends=SPLIT_ENDS, text=text)
         data = self._ask(prompt)
         if not data:

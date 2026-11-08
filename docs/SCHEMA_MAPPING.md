@@ -47,6 +47,10 @@ means the standard has no clear match.
 
 Terms in parentheses are partial matches. They are not in the registry's `maps`.
 
+Each relation outside the core, and each family and education relation, also lists
+cue words: the words a text uses to state it. With `RELATION_CUES` on, a window's
+prompt lists such a relation only when the window holds one of them (D47).
+
 **Coverage**
 
 - **Core module:** all 9 core relations map to ACE, TAC KBP or Wikidata. So the core

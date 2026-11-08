@@ -122,3 +122,33 @@ def test_pipeline_runs_llm_ie_windows_in_the_pool_without_the_reader(monkeypatch
     assert len(llm.prompts) >= 2  # every window, in the pool
     assert len(result.mentions) == len(llm.prompts)  # one per window, offsets rebased
     assert {text[m.start:m.end] for m in result.mentions} == {"Karen Boone"}
+
+
+def test_with_cues_a_prompt_lists_only_the_relations_cued_in_its_window() -> None:
+    llm = FakeLlm({"entities": [], "relations": []})
+    extractor = LlmIeExtractor(get_document_profile("sec_filing").ontology, llm, cues=True)
+    extractor.extract("Karen Boone serves on the board of directors of Sonos, Inc.")
+    extractor.extract("Morgan Stanley is acting as an underwriter. Her husband is Lee Park.")
+    plain, cued = llm.prompts
+    assert "- member_of:" in plain and "- works_for:" in plain
+    assert "- underwriter_of:" not in plain and "- spouse_of:" not in plain
+    assert "- underwriter_of:" in cued and "- spouse_of:" in cued
+    assert "- auditor_of:" not in cued
+    # Without cues every profile relation is listed.
+    llm.prompts.clear()
+    LlmIeExtractor(get_document_profile("sec_filing").ontology, llm, cues=False).extract(
+        "Karen Boone serves on the board of directors of Sonos, Inc.")
+    assert "- underwriter_of:" in llm.prompts[0]
+
+
+def test_an_answer_may_use_a_relation_the_window_did_not_list() -> None:
+    reply = {"entities": [{"text": "Fenwick & West LLP", "type": "organization"},
+                          {"text": "Sonos, Inc.", "type": "organization"}],
+             "relations": [{"head": "Fenwick & West LLP", "relation": "auditor_of",
+                            "tail": "Sonos, Inc.",
+                            "evidence": "Fenwick & West LLP reviewed Sonos, Inc."}]}
+    llm = FakeLlm(reply)
+    extractor = LlmIeExtractor(get_document_profile("sec_filing").ontology, llm, cues=True)
+    result = extractor.extract("Fenwick & West LLP reviewed Sonos, Inc. in March.")
+    assert "- auditor_of:" not in llm.prompts[0]
+    assert [r.relation for r in result.relations] == ["AUDITOR_OF"]

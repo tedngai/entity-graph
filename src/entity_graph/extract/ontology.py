@@ -6,6 +6,8 @@ which types. One definition here; both call sites read it. See DECISIONS.md D13.
 
 from __future__ import annotations
 
+import functools
+import re
 from dataclasses import dataclass
 
 # Ontology labels passed to GLiNER2.5. Descriptions are part of the question.
@@ -73,6 +75,11 @@ class RelationSpec:
     its terms in outside standards as (standard, term) pairs; a term starting
     with ``^`` is the inverse property (tail -> head). See DECISIONS.md D40 and
     docs/SCHEMA_MAPPING.md (D41).
+
+    ``cues`` are words a text uses when it states the relation (whole words or
+    phrases, any case; a trailing ``*`` matches a word start). With
+    ``RELATION_CUES`` on, an LLM prompt lists a relation with cues only for a
+    window holding one (D47); a relation without cues is always listed.
     """
 
     name: str
@@ -84,6 +91,7 @@ class RelationSpec:
     module: str = "core"
     group: str = ""
     maps: tuple[tuple[str, str], ...] = ()
+    cues: tuple[str, ...] = ()
 
 
 # Parents in the relation hierarchy. A relation's group is what a reader can
@@ -113,6 +121,17 @@ SCHEMA_MODULES: dict[str, str] = {
 }
 
 _ACE, _KBP, _WD, _SO, _FIBO = "ACE2005", "TAC-KBP", "Wikidata", "schema.org", "FIBO"
+
+# Cue words are written from each relation's meaning, not from any gold text.
+# Kinship and marriage words are shared by the family relations: a passage
+# naming one kin tie often states another ("her brother's wife").
+_KIN_CUES = (
+    "wife", "wives", "husband*", "spouse*", "marri*", "marry", "wed", "wedded", "widow*",
+    "divorc*", "consort", "father*", "mother*", "parent*", "son", "sons", "daughter*", "child",
+    "children", "born to", "brother*", "sister*", "sibling*", "twin*", "née", "heir*", "grand*",
+    "step*", "family", "families", "dad", "mom", "mum", "uncle*", "aunt*", "nephew*", "niece*",
+    "cousin*", "in-law*",
+)
 
 # Every relation any profile can use, defined once. ``works_for`` is not
 # unique_head: a person can have a current employer and a previous one.
@@ -175,67 +194,101 @@ RELATION_REGISTRY: tuple[RelationSpec, ...] = (
         "supplies", ("organization",), ("organization",), module="commerce", group="commerce",
         meaning="head sells or provides goods, services, capacity or facilities to tail, "
                 "including a customer named as such; lenders and agents of a loan are not "
-                "suppliers"),
+                "suppliers",
+        cues=("suppl*", "customer*", "client*", "purchas*", "buy*", "bought", "sell*", "sold",
+              "sale*", "vendor*", "provid*", "procur*", "contract*", "agreement*", "licens*",
+              "licenc*", "distribut*", "resell*", "order*", "service*", "source*", "sourcing",
+              "deliver*", "manufactur*", "partner*", "capacity", "facilit*")),
     RelationSpec(
         "sued", ("organization", "person"), ("organization", "person"), module="legal",
         group="conflict",
         meaning="head filed a lawsuit or claim against tail",
-        maps=((_ACE, "event:Justice.Sue"),)),
+        maps=((_ACE, "event:Justice.Sue"),),
+        cues=("sue", "sued", "sues", "suing", "lawsuit*", "suit", "suits", "litigat*",
+              "complaint*", "court*", "plaintiff*", "defendant*", "alleg*", "claim*",
+              "arbitrat*", "settle*", "judgment*", "judgement*", "proceeding*", "infring*",
+              "petition*")),
     RelationSpec(
         "underwriter_of", ("organization",), ("organization",), module="finance",
         group="commerce",
         meaning="head is an underwriter of tail's securities offering; arrangers and "
-                "bookrunners of a loan are not underwriters"),
+                "bookrunners of a loan are not underwriters",
+        cues=("underwrit*", "bookrunn*", "book-runn*", "book runn*", "lead manager*",
+              "placement agent*", "initial purchaser*", "dealer*", "offering*")),
     RelationSpec(
         "auditor_of", ("organization",), ("organization",), module="finance", group="commerce",
         meaning="head is the independent auditor (registered public accounting firm) of tail",
-        maps=((_WD, "^P8571"),)),
+        maps=((_WD, "^P8571"),),
+        cues=("audit*", "accountant*", "accounting firm*", "public accounting")),
     RelationSpec(
         "advisor_to", ("organization", "person"), ("organization",), module="commerce",
         group="commerce",
         meaning="head advises tail, including as its legal counsel; lenders and agents of a "
-                "loan are not advisors"),
+                "loan are not advisors",
+        cues=("advis*", "counsel*", "consult*", "legal", "passed upon", "law firm*", "attorney*",
+              "lawyer*", "banker*", "represent*")),
     RelationSpec(
         "develops", ("organization",), ("product",), module="commerce", group="creation",
         meaning="head develops or makes tail",
         maps=((_ACE, "ART.User-Owner-Inventor-Manufacturer"), (_WD, "^P178"),
-              (_WD, "^P176"), (_SO, "^manufacturer"))),
+              (_WD, "^P176"), (_SO, "^manufacturer")),
+        cues=("develop*", "built", "build*", "design*", "creat*", "launch*", "introduc*",
+              "releas*", "product*", "model*", "platform*", "engineer*", "invent*",
+              "manufactur*", "make*", "made", "maker*", "produc*", "brand*", "software",
+              "game*", "publish*")),
     # FIBO's lender/borrower distinction (D39): without it lenders and loan
     # agents had no relation and landed on supplies or advisor_to.
     RelationSpec(
         "lends_to", ("organization",), ("organization",), module="finance", group="commerce",
         meaning="head lends money to tail, or is a lender, administrative agent, collateral "
                 "agent or arranger of a loan, credit facility or notes extended to tail",
-        maps=((_FIBO, "FBC/DebtAndEquities/Debt: lender -> Borrower"),)),
+        maps=((_FIBO, "FBC/DebtAndEquities/Debt: lender -> Borrower"),),
+        cues=("loan*", "lend*", "credit*", "borrow*", "debt*", "facilit*", "note", "notes", "bond*",
+              "financ*", "mortgage*", "indebted*", "revolv*")),
     RelationSpec(
         "allied_with", ("person", "organization"), ("person", "organization"), symmetric=True,
-        module="politics", group="cooperation"),
+        module="politics", group="cooperation",
+        cues=("ally", "allied", "allies", "alliance*", "coalition*", "treat*", "pact*", "support*",
+              "join*", "unite*", "united", "cooperat*", "collaborat*", "side*")),
     RelationSpec(
         "opposed", ("person", "organization"), ("person", "organization"), module="politics",
-        group="conflict"),
+        group="conflict",
+        cues=("oppos*", "against", "enem*", "rival*", "war", "wars", "fought", "fight*", "battle*",
+              "conflict*", "resist*", "rebel*", "attack*", "invad*", "invasion*", "struggl*",
+              "hostil*", "denounc*", "protest*", "boycott*", "defeat*", "overthr*")),
     # Core relations the standards share and the registry lacked (D41, D43):
     # family and education, the largest gaps between people and organizations
     # on Re-DocRED (D42).
     RelationSpec(
         "spouse_of", ("person",), ("person",), symmetric=True, group="family",
         meaning="head and tail are or were married to each other",
-        maps=((_ACE, "PER-SOC.Family"), (_KBP, "per:spouse"), (_WD, "P26"), (_SO, "spouse"))),
+        maps=((_ACE, "PER-SOC.Family"), (_KBP, "per:spouse"), (_WD, "P26"), (_SO, "spouse")),
+        cues=_KIN_CUES),
     RelationSpec(
         "parent_of", ("person",), ("person",), group="family",
         meaning="head is the mother or father of tail",
         maps=((_ACE, "PER-SOC.Family"), (_KBP, "per:children"), (_WD, "P40"), (_WD, "^P22"),
-              (_WD, "^P25"), (_SO, "children"))),
+              (_WD, "^P25"), (_SO, "children")),
+        cues=_KIN_CUES),
     RelationSpec(
         "sibling_of", ("person",), ("person",), symmetric=True, group="family",
         meaning="head and tail are brothers or sisters",
         maps=((_ACE, "PER-SOC.Family"), (_KBP, "per:siblings"), (_WD, "P3373"),
-              (_SO, "sibling"))),
+              (_SO, "sibling")),
+        cues=_KIN_CUES),
     RelationSpec(
         "educated_at", ("person",), ("organization",), group="affiliation",
         meaning="head studied at, attended or graduated from tail, a school, college or "
                 "university; teaching or research there is works_for",
         maps=((_ACE, "ORG-AFF.Student-Alum"), (_KBP, "per:schools_attended"), (_WD, "P69"),
-              (_SO, "alumniOf"))),
+              (_SO, "alumniOf")),
+        cues=("universit*", "college*", "school*", "institut*", "academy", "academi*", "degree*",
+              "graduat*", "alumn*", "studied", "study*", "studies", "student*", "educat*",
+              "enrol*", "attended", "b.a.", "b.s.", "m.a.", "m.s.", "mba", "m.b.a.", "ph.d*",
+              "phd", "j.d.", "m.d.", "ll.b*", "ll.m*", "bachelor*", "master*", "doctor*",
+              "polytechnic*", "conservator*", "seminar*", "faculty", "professor*",
+              "lecturer*", "fellow*", "scholar*", "thesis", "dissertation*", "taught",
+              "teach*", "tutor*")),
 )
 
 
@@ -249,6 +302,23 @@ def relations_for(modules: tuple[str, ...]) -> tuple[RelationSpec, ...]:
 
 # The general ontology's relations: the core module.
 RELATION_SPECS: tuple[RelationSpec, ...] = relations_for(("core",))
+
+
+@functools.lru_cache(maxsize=None)
+def _cue_pattern(cues: tuple[str, ...]) -> re.Pattern:
+    parts = (rf"(?<!\w){re.escape(cue.rstrip('*'))}" + ("" if cue.endswith("*") else r"(?!\w)")
+             for cue in cues)
+    return re.compile("|".join(parts), re.IGNORECASE)
+
+
+def cued(spec: RelationSpec, text: str) -> bool:
+    """Whether ``text`` holds one of the relation's cues (always true without cues)."""
+    return not spec.cues or bool(_cue_pattern(spec.cues).search(text))
+
+
+def listed_relations(specs, text: str) -> tuple[RelationSpec, ...]:
+    """The relations of ``specs`` an LLM prompt lists for the window ``text`` (D47)."""
+    return tuple(spec for spec in specs if cued(spec, text))
 
 @dataclass(frozen=True)
 class Ontology:

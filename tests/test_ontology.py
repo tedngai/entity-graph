@@ -89,3 +89,30 @@ def test_standard_terms_name_a_known_standard_and_wikidata_ids_are_properties() 
             assert standard in known
             if standard == "Wikidata":
                 assert re.fullmatch(r"\^?P\d+", term), (spec.name, term)
+
+
+def test_cues_match_whole_words_and_word_starts_in_any_case() -> None:
+    from entity_graph.extract.ontology import RelationSpec, cued
+
+    spec = RelationSpec("parent_of", ("person",), ("person",), cues=("son", "marri*", "born to"))
+    assert cued(spec, "He left his SON the estate.")
+    assert cued(spec, "They were married in 1901.")
+    assert cued(spec, "She was born to a farming family.")
+    assert not cued(spec, "Mason sold the season's crop.")  # "son" is a whole word
+    assert not cued(spec, "His sons inherited it.")
+    assert cued(RelationSpec("x", ("person",), ("person",)), "any text at all")  # no cues
+
+
+def test_specialist_relations_have_cues_and_the_core_basics_are_always_listed() -> None:
+    from entity_graph.extract.ontology import RELATION_REGISTRY, listed_relations
+
+    for spec in RELATION_REGISTRY:
+        assert all(cue and cue == cue.strip().lower() for cue in spec.cues), spec.name
+        if spec.module != "core":
+            assert spec.cues, spec.name
+    listed = {s.name for s in listed_relations(RELATION_REGISTRY, "Dana Wu works at Acme.")}
+    assert {"works_for", "located_in", "member_of", "subsidiary_of"} <= listed
+    assert not listed & {"underwriter_of", "sued", "spouse_of", "educated_at"}
+    listed = {s.name for s in listed_relations(RELATION_REGISTRY,
+                                               "Goldman Sachs is an underwriter of the offering.")}
+    assert "underwriter_of" in listed

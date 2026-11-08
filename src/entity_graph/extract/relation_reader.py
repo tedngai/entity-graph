@@ -23,7 +23,13 @@ from ..config import load_config
 from .base import Mention, RelationProposal
 from .gliner_extractor import _evidence_for
 from .llm import LlmExtractor, parse_json_object
-from .ontology import RELATION_REGISTRY, Ontology, RelationSpec, stored_relation
+from .ontology import (
+    RELATION_REGISTRY,
+    Ontology,
+    RelationSpec,
+    listed_relations,
+    stored_relation,
+)
 
 log = logging.getLogger(__name__)
 
@@ -124,8 +130,12 @@ class RelationReader:
 
     name = "llm_reader"
 
-    def __init__(self, ontology: Ontology, llm: LlmExtractor | None = None) -> None:
+    def __init__(self, ontology: Ontology, llm: LlmExtractor | None = None,
+                 cues: bool | None = None) -> None:
         self.specs: dict[str, RelationSpec] = {s.name: s for s in ontology.relation_specs}
+        # Whether a prompt lists only the relations cued in its window (D47).
+        # Answers may still use any of the profile's relations.
+        self.cues = load_config().relation_cues if cues is None else cues
         self.labels_for_type: dict[str, set[str]] = {}
         for label, entity_type in ontology.label_to_type.items():
             self.labels_for_type.setdefault(entity_type, set()).add(label)
@@ -143,11 +153,14 @@ class RelationReader:
     def enabled(self) -> bool:
         return self.llm.enabled
 
-    def _relation_lines(self) -> str:
+    def _relation_lines(self, text: str = "") -> str:
+        specs = tuple(self.specs.values())
+        if self.cues and text:
+            specs = listed_relations(specs, text)
         return "\n".join(
-            f"- {name}: {RELATION_MEANINGS.get(name, name.replace('_', ' '))} "
+            f"- {spec.name}: {RELATION_MEANINGS.get(spec.name, spec.name.replace('_', ' '))} "
             f"[head: {'/'.join(spec.head)}; tail: {'/'.join(spec.tail)}]"
-            for name, spec in self.specs.items()
+            for spec in specs
         )
 
     @staticmethod
@@ -186,7 +199,7 @@ class RelationReader:
             return []
         entities = "\n".join(f'- "{s}" ({"/".join(sorted(ls))})' for s, ls in labels.items())
         prompt = USER_PROMPT.format(self_reference=self._self_reference(self_name, self_terms),
-                                    entities=entities, relations=self._relation_lines(),
+                                    entities=entities, relations=self._relation_lines(text),
                                     split_ends=SPLIT_ENDS, text=text)
         data = self._ask(prompt)
         return self._check(data.get("relations") or [], labels, text, self_name) if data else []
