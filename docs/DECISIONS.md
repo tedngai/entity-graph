@@ -1710,7 +1710,7 @@ per window would shrink.
 
 ## D47 — Cue words choose which relations a window's prompt lists
 
-**Status:** trial; setting added, off by default · **Date:** 2026-11-08
+**Status:** adopted 2026-11-08 (on by default; `RELATION_CUES=off` lists every relation) · **Date:** 2026-11-08
 
 **Context.** Relation definitions are about half of each filing prompt
 (sec_filing: 2,974 of about 5,800 characters, D46), and every window lists all
@@ -1722,7 +1722,7 @@ but the module is not the right unit: family and education are core relations
 **Decision.** `RelationSpec.cues` lists words a text uses when it states the
 relation (whole words or phrases, any case; a trailing `*` matches a word
 start), written from each relation's meaning, never from gold text. With
-`RELATION_CUES=on`, the LLM-only extractor and the relation reader list a
+`RELATION_CUES` on (the default), the LLM-only extractor and the relation reader list a
 relation with cues only in windows holding one. Relations without cues (the 9
 core relations) are always listed. Answers may still use any of the profile's
 relations. Every relation outside the core has cues (a test checks this), as do
@@ -1764,3 +1764,5 @@ fact's earlier evidence holds a cue word, so its relation was listed. Two of
 those windows (the Savoy and Herlin articles, 5 lost `parent_of` facts) sent
 byte-identical prompts with cues on and off. Completion tokens did not change:
 the saving is in prompt tokens only.
+
+**Adopted** by the user on 2026-11-08: on by default for every profile.

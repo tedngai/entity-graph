@@ -77,9 +77,9 @@ class RelationSpec:
     docs/SCHEMA_MAPPING.md (D41).
 
     ``cues`` are words a text uses when it states the relation (whole words or
-    phrases, any case; a trailing ``*`` matches a word start). With
-    ``RELATION_CUES`` on, an LLM prompt lists a relation with cues only for a
-    window holding one (D47); a relation without cues is always listed.
+    phrases, any case; a trailing ``*`` matches a word start). An LLM prompt
+    lists a relation with cues only for a window holding one (D47; turn off
+    with ``RELATION_CUES=off``); a relation without cues is always listed.
     """
 
     name: str

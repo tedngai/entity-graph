@@ -65,7 +65,8 @@ class Config:
     # LLM relation reader per window (D33): off | all.
     relation_reader: str = "off"
     # List a relation with cue words only in windows holding one (D47).
-    relation_cues: bool = False
+    # RELATION_CUES=off lists every profile relation in every window.
+    relation_cues: bool = True
     escalation_confidence: float = 0.5
 
     # Long-document chunking: sentence windows with overlap (see chunking.py)
@@ -175,7 +176,8 @@ def load_config() -> Config:
         llm_reasoning_effort=env("LLM_REASONING_EFFORT", "low").strip().lower(),
         escalate=env("EXTRACTION_ESCALATE", "").strip().lower() in ("1", "true", "yes"),
         relation_reader=env("RELATION_READER", "off").strip().lower(),
-        relation_cues=env("RELATION_CUES", "").strip().lower() in ("1", "true", "yes", "on"),
+        relation_cues=env("RELATION_CUES", "on").strip().lower()
+        not in ("0", "false", "no", "off"),
         escalation_confidence=float(env("ESCALATION_CONFIDENCE", "0.5")),
         chunk_max_sentences=int(env("CHUNK_MAX_SENTENCES", "8")),
         chunk_overlap_sentences=int(env("CHUNK_OVERLAP_SENTENCES", "2")),

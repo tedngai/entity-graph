@@ -116,3 +116,12 @@ def test_specialist_relations_have_cues_and_the_core_basics_are_always_listed() 
     listed = {s.name for s in listed_relations(RELATION_REGISTRY,
                                                "Goldman Sachs is an underwriter of the offering.")}
     assert "underwriter_of" in listed
+
+
+def test_relation_cues_are_on_by_default_and_can_be_turned_off(monkeypatch) -> None:
+    from entity_graph.config import load_config
+
+    monkeypatch.delenv("RELATION_CUES", raising=False)
+    assert load_config().relation_cues
+    monkeypatch.setenv("RELATION_CUES", "off")
+    assert not load_config().relation_cues
