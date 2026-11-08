@@ -95,6 +95,7 @@ RELATION_GROUPS: dict[str, str] = {
     "ownership": "control or equity between organizations: parent, acquirer, shareholder",
     "commerce": "goods, services or money provided by one organization to another",
     "cooperation": "a stated partnership or alliance, either way round",
+    "family": "kinship or marriage between people (ACE PER-SOC.Family)",
     "conflict": "a lawsuit or stated opposition",
     "location": "where an entity is",
     "creation": "who makes or develops a product",
@@ -212,6 +213,29 @@ RELATION_REGISTRY: tuple[RelationSpec, ...] = (
     RelationSpec(
         "opposed", ("person", "organization"), ("person", "organization"), module="politics",
         group="conflict"),
+    # Core relations the standards share and the registry lacked (D41, D43):
+    # family and education, the largest gaps between people and organizations
+    # on Re-DocRED (D42).
+    RelationSpec(
+        "spouse_of", ("person",), ("person",), symmetric=True, group="family",
+        meaning="head and tail are or were married to each other",
+        maps=((_ACE, "PER-SOC.Family"), (_KBP, "per:spouse"), (_WD, "P26"), (_SO, "spouse"))),
+    RelationSpec(
+        "parent_of", ("person",), ("person",), group="family",
+        meaning="head is the mother or father of tail",
+        maps=((_ACE, "PER-SOC.Family"), (_KBP, "per:children"), (_WD, "P40"), (_WD, "^P22"),
+              (_WD, "^P25"), (_SO, "children"))),
+    RelationSpec(
+        "sibling_of", ("person",), ("person",), symmetric=True, group="family",
+        meaning="head and tail are brothers or sisters",
+        maps=((_ACE, "PER-SOC.Family"), (_KBP, "per:siblings"), (_WD, "P3373"),
+              (_SO, "sibling"))),
+    RelationSpec(
+        "educated_at", ("person",), ("organization",), group="affiliation",
+        meaning="head studied at, attended or graduated from tail, a school, college or "
+                "university; teaching or research there is works_for",
+        maps=((_ACE, "ORG-AFF.Student-Alum"), (_KBP, "per:schools_attended"), (_WD, "P69"),
+              (_SO, "alumniOf"))),
 )
 
 

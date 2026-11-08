@@ -101,3 +101,13 @@ def test_profiles_are_built_from_their_schema_modules() -> None:
     for profile in PROFILES.values():
         assert "core" in profile.modules
         assert profile.ontology.relation_specs == relations_for(profile.modules)
+
+
+def test_family_and_education_are_core_relations() -> None:
+    for profile in PROFILES.values():
+        names = {spec.name for spec in profile.ontology.relation_specs}
+        assert {"spouse_of", "parent_of", "sibling_of", "educated_at"} <= names
+    assert is_symmetric("SPOUSE_OF") and is_symmetric("SIBLING_OF")
+    assert not is_symmetric("PARENT_OF")
+    assert legal_relations("person", "person") == ["SPOUSE_OF", "PARENT_OF", "SIBLING_OF"]
+    assert "EDUCATED_AT" in legal_relations("person", "organization")

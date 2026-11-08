@@ -1548,9 +1548,9 @@ spanning windows, no demonym end), recall is 26 to 33 of 95 (27 to 35%).
 - A leading "the" is not dropped when names are compared ("the United
   States"); that is a general matching / resolution question, not a DocRED one.
 
-## D43 — Trial: family and `educated_at` in the core module
+## D43 — Family and `educated_at` in the core module
 
-**Status:** trial, not adopted · **Date:** 2026-11-07
+**Status:** adopted · **Date:** 2026-11-07
 
 **Context.** On Re-DocRED the largest gaps between people and organizations
 are family (378 facts) and education (90) (D42); the standards share both
@@ -1558,8 +1558,7 @@ are family (378 facts) and education (90) (D42); the standards share both
 children / siblings / schools_attended, Wikidata P26 / P40 / P22 / P25 / P3373
 / P69, schema.org).
 
-**Trial.** Four core relations, appended to the registry (uncommitted while
-on trial):
+**Trial.** Four core relations, appended to the registry:
 
 - `spouse_of` (person, person; symmetric): married to each other.
 - `parent_of` (person -> person): mother or father of. Wikidata `P40`, `^P22`,
@@ -1602,3 +1601,9 @@ which the prompt skips as inference.
   Precision of unmatched proposals is not measured; in filings, every
   director's degrees will now become `EDUCATED_AT` edges.
 - The GLiNER backend also gets the four labels, untested.
+
+**Adopted (2026-11-07).** The user adopted all four. They are core relations,
+so every profile has them: the general, filing and history prompts all list
+them from now on. The schema snapshot of D40 no longer applies (the prompts
+changed on purpose). Unmeasured: precision of unmatched family / education
+proposals, and the GLiNER backend with the four labels.
