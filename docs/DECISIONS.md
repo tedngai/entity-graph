@@ -1669,3 +1669,41 @@ was overstated by comparing against gold names without this rule.
 Re-DocRED misses come down to what the extractor does not propose: implicit
 statements ("Japanese company Nintendo"), chained locations, inferred siblings,
 demonyms.
+
+## D46 — Trial: count facts stated in a description of an entity
+
+**Status:** trial, not adopted · **Date:** 2026-11-07
+
+**Context.** After D44 and D45, the Re-DocRED misses are facts the extractor
+does not propose. Some are stated in a description rather than a clause with
+its own verb ("Japanese video game company Nintendo", "the Army Air Corps
+Centre in Middle Wallop"), which the prompt's "skip your own inference" rule
+may push the model to drop.
+
+**Trial.** One sentence added to the LLM-only prompt (scratch script; the
+examples use invented names so no test text leaks into the prompt): a fact
+stated in a description of an entity counts as stated, e.g. "the Halden
+Institute in Bergen", "Swiss drug maker Rocheval", "Brightline Records, a label
+owned by Corvo Music"; each relation's meaning still applies. All six gold
+sets, gate on (284 extraction calls, 362k prompt + 132k completion tokens).
+
+| Gold set | Found / kept, current | Found / kept, trial |
+|---|---|---|
+| GreenGrid | 8 / 7 | 8 / 7 |
+| Anthropic S-1 | 54 / 53 | 51 / 50 |
+| CoreWeave S-1 | 53 / 52 | 52 / 50 |
+| CAVA S-1 | 82 / 73 | 81 / 75 |
+| Re-DocRED, 50 articles | 49 / 44 | 41 / 40 |
+| Re-DocRED, 40 family / education | 83 / 82 | 89 / 82 |
+
+**Reading.** No gain where the rule aims: on the 50 articles LOCATED_IN
+gained 4 and lost 4, and MEMBER_OF, FOUNDED and LEADS lost 8; the family set's
+gain is mostly PARENT_OF (+11, -4), which the rule does not touch. The S-1 sets
+lost LEADS facts (Anthropic -3). The churn matches the run-to-run noise seen in
+D43. No proposal read a state of incorporation as a location. Not adopted.
+
+**Side observation.** Since D43 the filing windows produce many
+`EDUCATED_AT` proposals (CoreWeave 25, CAVA 32, Anthropic 13 in the gold
+windows alone). Each filing prompt's relation definitions are about half its
+characters (sec_filing: 2,973 of about 5,800), which is what choosing modules
+per window would shrink.
